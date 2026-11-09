@@ -119,34 +119,68 @@
                 <span class="status-dot connecting"></span> Connecting to voice network...
             </div>
 
-            <!-- Quick Call Shortcut (for demo testing) -->
-            <div id="quickCallContainer" class="quick-friend-box hidden">
-                <span class="quick-friend-text">Quick Friend Call:</span>
-                <button id="quickCallBtn" class="btn btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem;" type="button">
-                    📞 Quick Call
-                </button>
+            <!-- 1. Search & Add Friend by Gmail -->
+            <div style="margin-bottom: 24px;">
+                <form id="addFriendForm">
+                    <div class="form-group" style="margin-bottom: 8px;">
+                        <label class="form-label" for="friendEmailInput">🔍 Search & Add Friend by Gmail:</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="friendEmailInput" class="form-input" placeholder="e.g. friend@gmail.com or username" required style="flex: 1;">
+                            <button type="submit" id="sendFriendReqBtn" class="btn btn-primary" style="width: auto; padding: 0 16px; white-space: nowrap;">
+                                ➕ Add Friend
+                            </button>
+                        </div>
+                    </div>
+                </form>
             </div>
 
-            <!-- Direct Call Form -->
-            <form id="callForm">
-                <div class="form-group">
-                    <label class="form-label" for="targetUsernameInput">Enter Friend's Username to Call:</label>
-                    <input type="text" id="targetUsernameInput" class="form-input" placeholder="e.g. rahul, anjali, or signkipdesign" autocomplete="off" required>
+            <!-- 2. Pending Friend Requests (shows when a friend sends a request) -->
+            <div id="pendingRequestsSection" class="hidden">
+                <div class="section-header-row" style="margin-top: 0;">
+                    <div class="section-heading-sm">
+                        <span>📬 Incoming Friend Requests</span>
+                        <span id="pendingCountBadge" class="friends-count-badge" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d;">0</span>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-success" id="makeCallBtn">
-                    📞 Send Voice Call Request
-                </button>
-            </form>
+                <div id="pendingRequestsList" class="pending-requests-container"></div>
+            </div>
+
+            <!-- 3. Friends List -->
+            <div class="section-header-row">
+                <div class="section-heading-sm">
+                    <span>👥 My Friends</span>
+                    <span id="friendsCountBadge" class="friends-count-badge">0</span>
+                </div>
+            </div>
+
+            <div id="friendsListContainer" class="friends-list">
+                <!-- Dynamically rendered by app.js -->
+            </div>
+
+            <!-- 4. Direct Call (Optional Quick Dial) -->
+            <details style="margin-top: 16px; margin-bottom: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 14px;">
+                <summary style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; font-weight: 500;">
+                    📞 Direct Username Dial (Optional)
+                </summary>
+                <form id="callForm" style="margin-top: 12px;">
+                    <div class="form-group">
+                        <input type="text" id="targetUsernameInput" class="form-input" placeholder="Enter username (e.g. rahul, anjali)" autocomplete="off">
+                    </div>
+                    <button type="submit" class="btn btn-success" id="makeCallBtn">
+                        📞 Call by Username
+                    </button>
+                </form>
+            </details>
 
             <!-- How to test instruction card -->
             <div class="instruction-box">
-                <strong>💡 How to test between two accounts:</strong>
+                <strong>💡 How Friend Calling Works:</strong>
                 <ol>
-                    <li>Sign in with your Gmail on this tab (e.g. <strong>signkipdesign@gmail.com</strong>).</li>
-                    <li>Open an <strong>Incognito window</strong> or open on your <strong>mobile phone</strong>: <code style="color: #60a5fa;">https://signkipdesign-afk.github.io/my-friend/</code></li>
-                    <li>Sign in as <strong>Anjali</strong> (or another Gmail / guest name).</li>
-                    <li>From your tab, type <strong>anjali</strong> and click <strong>Send Voice Call Request</strong>.</li>
-                    <li>The other tab/phone rings with sound. Click <strong>Accept</strong> to start talking!</li>
+                    <li>Sign in with your Gmail (e.g. <strong>signkipdesign@gmail.com</strong>).</li>
+                    <li>Open an Incognito tab or mobile phone, and sign in with another Gmail (or Demo account <strong>Anjali</strong>).</li>
+                    <li>In the search box above, enter the other person's Gmail address (e.g. <strong>anjali.demo@gmail.com</strong>) and click <strong>➕ Add Friend</strong>.</li>
+                    <li>The other account receives a Friend Request. Once they click <strong>Accept</strong>, both of you appear in each other's <strong>Friends List</strong>!</li>
+                    <li>Click <strong>📞 Call</strong> next to their name in the Friends List to start talking!</li>
                 </ol>
             </div>
         </section>
@@ -232,9 +266,9 @@
     <div id="toast" class="toast"></div>
 
     <!-- Scripts with Cache-Busting Version Query -->
-    <script src="js/peerjs.min.js?v=3"></script>
-    <script src="js/sound.js?v=3"></script>
-    <script src="js/auth.js?v=3"></script>
-    <script src="js/app.js?v=3"></script>
+    <script src="js/peerjs.min.js?v=4"></script>
+    <script src="js/sound.js?v=4"></script>
+    <script src="js/auth.js?v=4"></script>
+    <script src="js/app.js?v=4"></script>
 </body>
 </html>

@@ -158,6 +158,98 @@ class AuthManager {
     isLoggedIn() {
         return !!this.currentUser;
     }
+
+    // Friends Management
+    getFriendsKey() {
+        return this.currentUser ? `myfriend_friends_${this.currentUser.username.toLowerCase()}` : null;
+    }
+
+    getPendingKey() {
+        return this.currentUser ? `myfriend_pending_req_${this.currentUser.username.toLowerCase()}` : null;
+    }
+
+    getFriends() {
+        const key = this.getFriendsKey();
+        if (!key) return [];
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) {}
+        }
+        // Defaults for demo users
+        if (this.currentUser.username === 'rahul') {
+            return [{
+                username: 'anjali',
+                name: 'Anjali Menon',
+                email: 'anjali.demo@gmail.com',
+                avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=anjali'
+            }];
+        } else if (this.currentUser.username === 'anjali') {
+            return [{
+                username: 'rahul',
+                name: 'Rahul Kumar',
+                email: 'rahul.demo@gmail.com',
+                avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=rahul'
+            }];
+        }
+        return [];
+    }
+
+    addFriend(friend) {
+        const key = this.getFriendsKey();
+        if (!key || !friend || !friend.username) return;
+        const friends = this.getFriends();
+        const exists = friends.some(f => f.username.toLowerCase() === friend.username.toLowerCase());
+        if (!exists) {
+            friends.unshift({
+                username: friend.username.toLowerCase(),
+                name: friend.name || friend.username,
+                email: friend.email || `${friend.username}@gmail.com`,
+                avatar: friend.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${friend.username.toLowerCase()}`
+            });
+            localStorage.setItem(key, JSON.stringify(friends));
+        }
+        return friends;
+    }
+
+    removeFriend(username) {
+        const key = this.getFriendsKey();
+        if (!key) return;
+        let friends = this.getFriends();
+        friends = friends.filter(f => f.username.toLowerCase() !== username.toLowerCase());
+        localStorage.setItem(key, JSON.stringify(friends));
+        return friends;
+    }
+
+    getPendingRequests() {
+        const key = this.getPendingKey();
+        if (!key) return [];
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) {}
+        }
+        return [];
+    }
+
+    addPendingRequest(fromUser) {
+        const key = this.getPendingKey();
+        if (!key || !fromUser || !fromUser.username) return;
+        const requests = this.getPendingRequests();
+        const exists = requests.some(r => r.username.toLowerCase() === fromUser.username.toLowerCase());
+        if (!exists) {
+            requests.unshift(fromUser);
+            localStorage.setItem(key, JSON.stringify(requests));
+        }
+        return requests;
+    }
+
+    removePendingRequest(fromUsername) {
+        const key = this.getPendingKey();
+        if (!key) return;
+        let requests = this.getPendingRequests();
+        requests = requests.filter(r => r.username.toLowerCase() !== fromUsername.toLowerCase());
+        localStorage.setItem(key, JSON.stringify(requests));
+        return requests;
+    }
 }
 
 window.authManager = new AuthManager();

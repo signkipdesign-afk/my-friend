@@ -1,4 +1,4 @@
-// Main Application Logic: WebRTC Voice Calling, PeerJS, Audio Controls, & UI State
+// Main Application Logic: WebRTC Voice Calling, PeerJS, Audio Controls, Friends System & UI State
 
 class CallApp {
     constructor() {
@@ -28,6 +28,7 @@ class CallApp {
 
         // Bind events
         this.bindAuthEvents();
+        this.bindFriendEvents();
         this.bindCallEvents();
 
         // Check if user already logged in
@@ -72,7 +73,6 @@ class CallApp {
             }
         }, 300);
 
-        // Clear after 4 seconds
         setTimeout(() => clearInterval(checkGsi), 4000);
     }
 
@@ -148,20 +148,213 @@ class CallApp {
         });
     }
 
+    // ==========================================
+    // FRIENDS MANAGEMENT & SEARCH
+    // ==========================================
+    bindFriendEvents() {
+        const addFriendForm = document.getElementById('addFriendForm');
+        addFriendForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = document.getElementById('friendEmailInput');
+            if (!input) return;
+            const query = input.value.trim().toLowerCase();
+            if (!query) return;
+
+            this.sendFriendRequest(query);
+            input.value = '';
+        });
+    }
+
+    sendFriendRequest(targetQuery) {
+        const currentUser = authManager.getUser();
+        if (!currentUser) return;
+
+        // Parse username from email if provided
+        let targetUsername = targetQuery;
+        let targetEmail = targetQuery;
+        if (targetQuery.includes('@')) {
+            targetUsername = targetQuery.split('@')[0].replace(/[^a-z0-9_-]/g, '');
+        } else {
+            targetUsername = targetQuery.replace(/[^a-z0-9_-]/g, '');
+            targetEmail = `${targetUsername}@gmail.com`;
+        }
+
+        if (!targetUsername) {
+            this.showToast("Please enter a valid Gmail address or username", 'error');
+            return;
+        }
+
+        if (targetUsername === currentUser.username.toLowerCase()) {
+            this.showToast("You cannot add yourself as a friend!", 'warning');
+            return;
+        }
+
+        const existingFriends = authManager.getFriends();
+        if (existingFriends.some(f => f.username.toLowerCase() === targetUsername)) {
+            this.showToast(`${targetUsername} is already in your Friends List!`, 'info');
+            return;
+        }
+
+        // Add to friend list so user has it immediately
+        const friendObj = {
+            username: targetUsername,
+            name: targetUsername.charAt(0).toUpperCase() + targetUsername.slice(1),
+            email: targetEmail,
+            avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${targetUsername}`
+        };
+        authManager.addFriend(friendObj);
+        this.renderFriendsList();
+
+        // Send real-time friend request signal via PeerJS
+        try {
+            const remotePeerId = this.formatPeerId(targetUsername);
+            const conn = this.peer.connect(remotePeerId, { reliable: true });
+            conn.on('open', () => {
+                conn.send({
+                    type: 'FRIEND_REQUEST',
+                    sender: currentUser
+                });
+            });
+            conn.on('error', (err) => {
+                console.log("Friend request connection notice:", err);
+            });
+        } catch (e) {
+            console.log("Notice sending friend request:", e);
+        }
+
+        this.showToast(`Friend added: ${targetEmail} 👥`, 'success');
+    }
+
+    renderFriendsList() {
+        const container = document.getElementById('friendsListContainer');
+        const countBadge = document.getElementById('friendsCountBadge');
+        if (!container) return;
+
+        const friends = authManager.getFriends();
+        if (countBadge) countBadge.textContent = friends.length;
+
+        if (friends.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    No friends added yet.<br>
+                    Enter your friend's Gmail address above to add them!
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = '';
+        friends.forEach(friend => {
+            const item = document.createElement('div');
+            item.className = 'friend-item';
+            item.innerHTML = `
+                <div class="friend-left">
+                    <img src="${friend.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${friend.username}`}" alt="${friend.name}" class="friend-avatar">
+                    <div>
+                        <div class="friend-name">${friend.name || friend.username}</div>
+                        <div class="friend-meta">${friend.email || `@${friend.username}`}</div>
+                    </div>
+                </div>
+                <div class="friend-right">
+                    <button class="btn-call-friend" data-username="${friend.username}">
+                        📞 Call
+                    </button>
+                    <button class="btn-remove-friend" data-username="${friend.username}" title="Remove Friend">
+                        🗑️
+                    </button>
+                </div>
+            `;
+
+            // Call friend button
+            item.querySelector('.btn-call-friend').addEventListener('click', () => {
+                this.startOutgoingCall(friend.username);
+            });
+
+            // Remove friend button
+            item.querySelector('.btn-remove-friend').addEventListener('click', () => {
+                authManager.removeFriend(friend.username);
+                this.renderFriendsList();
+                this.showToast(`Removed @${friend.username} from friends`, 'info');
+            });
+
+            container.appendChild(item);
+        });
+    }
+
+    renderPendingRequests() {
+        const section = document.getElementById('pendingRequestsSection');
+        const container = document.getElementById('pendingRequestsList');
+        const countBadge = document.getElementById('pendingCountBadge');
+        if (!section || !container) return;
+
+        const requests = authManager.getPendingRequests();
+        if (countBadge) countBadge.textContent = requests.length;
+
+        if (requests.length === 0) {
+            section.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        section.classList.remove('hidden');
+        container.innerHTML = '';
+
+        requests.forEach(req => {
+            const card = document.createElement('div');
+            card.className = 'pending-card';
+            card.innerHTML = `
+                <div class="pending-info">
+                    <img src="${req.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${req.username}`}" alt="${req.name}" class="pending-avatar">
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem;">${req.name || req.username}</div>
+                        <div style="font-size: 0.75rem; color: #94a3b8;">${req.email || `@${req.username}`}</div>
+                    </div>
+                </div>
+                <div class="pending-actions">
+                    <button class="btn-sm btn-success accept-req-btn">Accept</button>
+                    <button class="btn-sm btn-danger decline-req-btn">Decline</button>
+                </div>
+            `;
+
+            // Accept friend request
+            card.querySelector('.accept-req-btn').addEventListener('click', () => {
+                authManager.addFriend(req);
+                authManager.removePendingRequest(req.username);
+                this.renderPendingRequests();
+                this.renderFriendsList();
+
+                // Signal sender
+                try {
+                    const remotePeerId = this.formatPeerId(req.username);
+                    const conn = this.peer.connect(remotePeerId, { reliable: true });
+                    conn.on('open', () => {
+                        conn.send({
+                            type: 'FRIEND_REQUEST_ACCEPTED',
+                            sender: authManager.getUser()
+                        });
+                    });
+                } catch (e) {}
+
+                this.showToast(`Added ${req.name || req.username} to your Friends List! 🟢`, 'success');
+            });
+
+            // Decline friend request
+            card.querySelector('.decline-req-btn').addEventListener('click', () => {
+                authManager.removePendingRequest(req.username);
+                this.renderPendingRequests();
+                this.showToast("Friend request declined", 'info');
+            });
+
+            container.appendChild(card);
+        });
+    }
+
     bindCallEvents() {
         // Direct Call form
         document.getElementById('callForm')?.addEventListener('submit', (e) => {
             e.preventDefault();
             const targetUsername = document.getElementById('targetUsernameInput').value.trim().toLowerCase();
             this.startOutgoingCall(targetUsername);
-        });
-
-        // Quick Friend Shortcut Call
-        document.getElementById('quickCallBtn')?.addEventListener('click', () => {
-            const target = document.getElementById('quickCallBtn').dataset.target;
-            if (target) {
-                this.startOutgoingCall(target);
-            }
         });
 
         // Cancel Outgoing Call
@@ -193,10 +386,11 @@ class CallApp {
         document.getElementById('copyUsernameBtn')?.addEventListener('click', () => {
             const user = authManager.getUser();
             if (user && user.username) {
-                navigator.clipboard.writeText(user.username).then(() => {
-                    this.showToast(`Username copied: @${user.username}`, 'success');
+                const textToCopy = user.email || user.username;
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    this.showToast(`Copied to clipboard: ${textToCopy}`, 'success');
                 }).catch(() => {
-                    this.showToast(`Your username is: ${user.username}`, 'info');
+                    this.showToast(`Your ID is: ${textToCopy}`, 'info');
                 });
             }
         });
@@ -218,20 +412,9 @@ class CallApp {
         document.getElementById('userUsername').textContent = `@${user.username}`;
         document.getElementById('userEmail').textContent = user.email || '';
 
-        // Configure Quick Call Friend shortcut button
-        const quickContainer = document.getElementById('quickCallContainer');
-        const quickBtn = document.getElementById('quickCallBtn');
-        if (user.targetFriend) {
-            quickContainer.classList.remove('hidden');
-            quickBtn.dataset.target = user.targetFriend;
-            quickBtn.innerHTML = `📞 Call ${user.targetFriendName} (<strong>@${user.targetFriend}</strong>)`;
-        } else {
-            // Default demo friend recommendation
-            const recTarget = user.username === 'rahul' ? 'anjali' : 'rahul';
-            quickContainer.classList.remove('hidden');
-            quickBtn.dataset.target = recTarget;
-            quickBtn.innerHTML = `📞 Quick Call <strong>@${recTarget}</strong>`;
-        }
+        // Render Friends System
+        this.renderFriendsList();
+        this.renderPendingRequests();
 
         // Initialize Peer connection with username
         this.initPeer(user.username);
@@ -279,13 +462,12 @@ class CallApp {
             this.peer.on('error', (err) => {
                 console.error("PeerJS error:", err);
                 if (err.type === 'unavailable-id') {
-                    statusBadge.innerHTML = `<span class="status-dot online"></span> Active in another window`;
-                    this.showToast(`Username @${username} is already active in another tab.`, 'warning');
+                    statusBadge.innerHTML = `<span class="status-dot online"></span> Active in another tab`;
                 } else if (err.type === 'peer-unavailable') {
                     this.showToast("Friend is currently offline or username not found.", 'error');
                     this.cancelOutgoingCall("User is currently offline.");
                 } else {
-                    this.showToast(`Network: ${err.message || err.type}`, 'info');
+                    this.showToast(`Network notice: ${err.type || err.message}`, 'info');
                 }
             });
 
@@ -306,10 +488,24 @@ class CallApp {
     handleIncomingDataConnection(conn) {
         conn.on('data', (data) => {
             console.log("Received peer signal:", data);
+
+            // Friend Request Handshake
+            if (data.type === 'FRIEND_REQUEST') {
+                authManager.addPendingRequest(data.sender);
+                this.renderPendingRequests();
+                this.showToast(`New Friend Request from ${data.sender.name || data.sender.email}! 📬`, 'info');
+                return;
+            }
+            else if (data.type === 'FRIEND_REQUEST_ACCEPTED') {
+                authManager.addFriend(data.sender);
+                this.renderFriendsList();
+                this.showToast(`${data.sender.name || data.sender.email} accepted your friend request! 🟢`, 'success');
+                return;
+            }
             
+            // Voice Call Handshake
             if (data.type === 'CALL_REQUEST') {
                 if (this.callState !== 'idle') {
-                    // Already in a call
                     conn.send({ type: 'CALL_BUSY' });
                     return;
                 }
@@ -343,7 +539,11 @@ class CallApp {
         const currentUser = authManager.getUser();
         if (!currentUser) return;
 
-        const cleanTarget = targetUsername.toLowerCase().trim().replace('@', '');
+        let cleanTarget = targetUsername.toLowerCase().trim().replace('@', '');
+        if (cleanTarget.includes('@')) {
+            cleanTarget = cleanTarget.split('@')[0].replace(/[^a-z0-9_-]/g, '');
+        }
+
         if (!cleanTarget) {
             this.showToast("Please enter a valid friend's username", 'error');
             return;
