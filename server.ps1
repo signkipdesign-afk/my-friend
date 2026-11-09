@@ -7,7 +7,7 @@ $listener.Prefixes.Add($prefix)
 try {
     $listener.Start()
 } catch {
-    Write-Host "Error starting on $prefix. Trying port 8080..." -ForegroundColor Yellow
+    Write-Host "Port 3000 busy. Trying port 8080..." -ForegroundColor Yellow
     $port = 8080
     $prefix = "http://localhost:$port/"
     $listener = New-Object System.Net.HttpListener
@@ -59,13 +59,19 @@ while ($listener.IsListening) {
             $response.ContentType = $contentType
             $response.ContentLength64 = $bytes.Length
             $response.StatusCode = 200
-            $response.OutputStream.Write($bytes, 0, $bytes.Length)
+
+            if ($request.HttpMethod -ne "HEAD") {
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+            }
         } else {
             $response.StatusCode = 404
             $notFound = [System.Text.Encoding]::UTF8.GetBytes("404 Not Found")
-            $response.OutputStream.Write($notFound, 0, $notFound.Length)
+            $response.ContentLength64 = $notFound.Length
+            if ($request.HttpMethod -ne "HEAD") {
+                $response.OutputStream.Write($notFound, 0, $notFound.Length)
+            }
         }
-        $response.OutputStream.Close()
+        $response.Close()
     } catch {
         # ignore abort on exit
     }
