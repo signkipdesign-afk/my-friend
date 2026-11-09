@@ -95,6 +95,21 @@ class CallApp {
             if (user) this.showMainApp(user);
         });
 
+        // Gmail Direct Login form
+        document.getElementById('gmailLoginForm')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('gmailInput').value.trim();
+            if (!email || !email.includes('@')) {
+                this.showToast("Please enter a valid Gmail address", 'error');
+                return;
+            }
+            const user = authManager.loginWithGmail(email);
+            if (user) {
+                this.showToast(`Logged in as ${user.email} 🟢`, 'success');
+                this.showMainApp(user);
+            }
+        });
+
         // Custom Login form
         document.getElementById('customLoginForm')?.addEventListener('submit', (e) => {
             e.preventDefault();

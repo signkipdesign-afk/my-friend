@@ -75,6 +75,26 @@ class AuthManager {
         return user;
     }
 
+    loginWithGmail(email) {
+        const cleanEmail = email.trim().toLowerCase();
+        if (!cleanEmail || !cleanEmail.includes('@')) return null;
+
+        const namePart = cleanEmail.split('@')[0];
+        const cleanUser = namePart.replace(/[^a-z0-9_-]/g, '');
+        const displayName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+
+        const user = {
+            id: cleanUser,
+            name: displayName,
+            username: cleanUser,
+            email: cleanEmail,
+            avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUser}`,
+            isGmail: true
+        };
+        this.setUser(user);
+        return user;
+    }
+
     // Google Sign-In with Google Identity Services (GIS) / OAuth 2.0 Credential
     handleGoogleCredentialResponse(response) {
         try {

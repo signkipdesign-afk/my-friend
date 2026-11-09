@@ -57,9 +57,22 @@
                 </button>
             </div>
 
-            <div class="divider">അല്ലെങ്കിൽ Google (Gmail) ഉപയോഗിക്കുക</div>
+            <div class="divider">അല്ലെങ്കിൽ നിങ്ങളുടെ Gmail ഉപയോഗിക്കുക</div>
 
-            <!-- Google Sign-in Button -->
+            <!-- Direct Gmail Login Form -->
+            <form id="gmailLoginForm" style="margin-bottom: 16px;">
+                <div class="form-group">
+                    <label class="form-label" for="gmailInput">📧 നിങ്ങളുടെ Gmail അഡ്രസ് നൽകുക:</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="email" id="gmailInput" class="form-input" placeholder="ഉദാ: name@gmail.com" required style="flex: 1;">
+                        <button type="submit" class="btn btn-primary" style="width: auto; padding: 0 18px; white-space: nowrap;">
+                            Login ➔
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Google OAuth Official Sign-in Button (One-Tap) -->
             <div class="google-signin-wrapper">
                 <div id="googleSignInBtn"></div>
             </div>
