@@ -47,16 +47,20 @@ class CallApp {
             if (window.google && window.google.accounts && window.google.accounts.id) {
                 clearInterval(checkGsi);
                 try {
-                    // Pre-configured default client ID or configurable
-                    const clientId = window.GOOGLE_CLIENT_ID || "1028751483863-placeholder.apps.googleusercontent.com";
+                    const clientId = window.GOOGLE_CLIENT_ID || "";
+                    if (!clientId) {
+                        return; // Use direct Gmail login if no client ID is set
+                    }
                     window.google.accounts.id.initialize({
                         client_id: clientId,
                         callback: (res) => this.onGoogleSignInSuccess(res),
                         auto_select: false
                     });
 
+                    const googleWrapper = document.getElementById('googleButtonWrapper');
                     const googleBtnContainer = document.getElementById('googleSignInBtn');
-                    if (googleBtnContainer) {
+                    if (googleWrapper && googleBtnContainer) {
+                        googleWrapper.style.display = 'flex';
                         window.google.accounts.id.renderButton(
                             googleBtnContainer,
                             { theme: "filled_blue", size: "large", shape: "pill", width: 280, text: "signin_with" }
@@ -68,14 +72,14 @@ class CallApp {
             }
         }, 300);
 
-        // Clear after 6 seconds if offline/blocked
-        setTimeout(() => clearInterval(checkGsi), 6000);
+        // Clear after 4 seconds
+        setTimeout(() => clearInterval(checkGsi), 4000);
     }
 
     onGoogleSignInSuccess(response) {
         const user = authManager.handleGoogleCredentialResponse(response);
         if (user) {
-            this.showToast(`Welcome ${user.name}!`, 'success');
+            this.showToast(`Welcome, ${user.name}!`, 'success');
             this.showMainApp(user);
         } else {
             this.showToast("Google sign in failed. Please try again.", 'error');
@@ -83,6 +87,29 @@ class CallApp {
     }
 
     bindAuthEvents() {
+        // Direct Gmail Login Form
+        const handleGmailLogin = (e) => {
+            if (e) e.preventDefault();
+            const input = document.getElementById('gmailInput');
+            if (!input) return;
+            const email = input.value.trim();
+            if (!email || !email.includes('@')) {
+                this.showToast("Please enter a valid Gmail address (e.g. yourname@gmail.com)", 'error');
+                return;
+            }
+            const user = authManager.loginWithGmail(email);
+            if (user) {
+                this.showToast(`Signed in as ${user.email} 🟢`, 'success');
+                this.showMainApp(user);
+            } else {
+                this.showToast("Could not sign in with this email.", 'error');
+            }
+        };
+
+        const gmailForm = document.getElementById('gmailLoginForm');
+        gmailForm?.addEventListener('submit', handleGmailLogin);
+        document.getElementById('gmailSubmitBtn')?.addEventListener('click', handleGmailLogin);
+
         // Demo User 1 (Rahul)
         document.getElementById('demoRahulBtn')?.addEventListener('click', () => {
             const user = authManager.loginAsDemo('rahul');
@@ -93,21 +120,6 @@ class CallApp {
         document.getElementById('demoAnjaliBtn')?.addEventListener('click', () => {
             const user = authManager.loginAsDemo('anjali');
             if (user) this.showMainApp(user);
-        });
-
-        // Gmail Direct Login form
-        document.getElementById('gmailLoginForm')?.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const email = document.getElementById('gmailInput').value.trim();
-            if (!email || !email.includes('@')) {
-                this.showToast("Please enter a valid Gmail address", 'error');
-                return;
-            }
-            const user = authManager.loginWithGmail(email);
-            if (user) {
-                this.showToast(`Logged in as ${user.email} 🟢`, 'success');
-                this.showMainApp(user);
-            }
         });
 
         // Custom Login form
@@ -164,7 +176,7 @@ class CallApp {
 
         // Decline Incoming Call
         document.getElementById('declineCallBtn')?.addEventListener('click', () => {
-            this.declineIncomingCall();
+            this.declineIncomingCall("Call declined");
         });
 
         // Hangup Connected Call
@@ -252,8 +264,8 @@ class CallApp {
 
             this.peer.on('open', (id) => {
                 console.log('Peer connected with ID:', id);
-                statusBadge.innerHTML = `<span class="status-dot online"></span> Online & Ready`;
-                this.showToast("Connected to voice network! 🟢", 'success');
+                statusBadge.innerHTML = `<span class="status-dot online"></span> Online & Ready for Calls`;
+                this.showToast("Voice network connected 🟢", 'success');
             });
 
             this.peer.on('connection', (conn) => {
@@ -268,12 +280,12 @@ class CallApp {
                 console.error("PeerJS error:", err);
                 if (err.type === 'unavailable-id') {
                     statusBadge.innerHTML = `<span class="status-dot online"></span> Active in another window`;
-                    this.showToast(`Username @${username} is active elsewhere or reconnecting.`, 'warning');
+                    this.showToast(`Username @${username} is already active in another tab.`, 'warning');
                 } else if (err.type === 'peer-unavailable') {
-                    this.showToast("User is offline or not found.", 'error');
+                    this.showToast("Friend is currently offline or username not found.", 'error');
                     this.cancelOutgoingCall("User is currently offline.");
                 } else {
-                    this.showToast(`Network notice: ${err.message || err.type}`, 'info');
+                    this.showToast(`Network: ${err.message || err.type}`, 'info');
                 }
             });
 
@@ -309,10 +321,10 @@ class CallApp {
                 this.onOutgoingCallAccepted();
             } 
             else if (data.type === 'CALL_DECLINED') {
-                this.cancelOutgoingCall("Call was declined by user.");
+                this.cancelOutgoingCall("Friend declined the call.");
             } 
             else if (data.type === 'CALL_BUSY') {
-                this.cancelOutgoingCall("User is currently busy on another call.");
+                this.cancelOutgoingCall("Friend is busy on another call.");
             } 
             else if (data.type === 'CALL_ENDED') {
                 this.hangupCall("Friend ended the call.");
@@ -353,7 +365,7 @@ class CallApp {
         // UI Outgoing Screen
         document.getElementById('outgoingTargetName').textContent = `@${cleanTarget}`;
         document.getElementById('outgoingTargetAvatar').src = `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanTarget}`;
-        document.getElementById('outgoingStatusText').textContent = "Requesting call...";
+        document.getElementById('outgoingStatusText').textContent = "Requesting voice call...";
         document.getElementById('outgoingCallModal').classList.remove('hidden');
 
         // Play Outgoing Ring Sound
@@ -364,7 +376,7 @@ class CallApp {
         this.currentDataConn = this.peer.connect(remotePeerId, { reliable: true });
 
         this.currentDataConn.on('open', () => {
-            document.getElementById('outgoingStatusText').textContent = "Ringing friend's device...";
+            document.getElementById('outgoingStatusText').textContent = "Ringing friend's phone...";
             this.currentDataConn.send({
                 type: 'CALL_REQUEST',
                 caller: currentUser

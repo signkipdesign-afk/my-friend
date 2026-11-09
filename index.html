@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyFriend - Audio Calling App</title>
-    <meta name="description" content="Simple, modern peer-to-peer voice calling web application for friends.">
+    <title>MyFriend - Peer-to-Peer Voice Calling</title>
+    <meta name="description" content="Simple, fast, and modern voice calling web application for friends.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%2222%22 font-size=%2222%22>📞</text></svg>">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=3">
     
     <!-- Google Identity Services (Sign in with Google / Gmail) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -20,24 +20,44 @@
                 <span>🟢 WebRTC Voice</span> • <span>Peer-to-Peer</span>
             </div>
             <h1 class="app-title">MyFriend Call</h1>
-            <p class="app-subtitle">ഫ്രണ്ട്സ് വോയ്‌സ് കോളിംഗ് വെബ് ആപ്പ്</p>
+            <p class="app-subtitle">Free Peer-to-Peer Voice Calling for Friends</p>
         </header>
 
         <!-- ========================================== -->
         <!-- 1. LOGIN SCREEN -->
         <!-- ========================================== -->
         <section id="loginSection" class="card">
-            <h2 class="login-title">ലോഗിൻ ചെയ്യുക / Sign In</h2>
-            <p class="login-desc">താഴെയുള്ള ഏതെങ്കിലും ഒരു ഡെമോ അക്കൗണ്ട് വഴിയോ ഗൂഗിൾ (Gmail) വഴിയോ ലോഗിൻ ചെയ്യാം.</p>
+            <h2 class="login-title">Sign In</h2>
+            <p class="login-desc">Sign in with your Gmail address, a demo account, or create a custom username.</p>
 
-            <!-- Pre-configured Demo Accounts (User requested 2 demo accounts) -->
+            <!-- 1. Primary Method: Gmail Sign In -->
+            <form id="gmailLoginForm" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label class="form-label" for="gmailInput">📧 Enter your Gmail address:</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="email" id="gmailInput" class="form-input" placeholder="e.g. signkipdesign@gmail.com" required style="flex: 1;">
+                        <button type="submit" id="gmailSubmitBtn" class="btn btn-primary" style="width: auto; padding: 0 20px; white-space: nowrap;">
+                            Sign In ➔
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Google OAuth Official One-Tap Container -->
+            <div class="google-signin-wrapper" id="googleButtonWrapper" style="display: none;">
+                <div id="googleSignInBtn"></div>
+            </div>
+
+            <div class="divider">or try with 1-click Demo Accounts</div>
+
+            <!-- Pre-configured Demo Accounts for quick 2-device testing -->
             <div class="demo-account-list">
                 <!-- Demo User 1: Rahul -->
                 <button id="demoRahulBtn" class="demo-btn" type="button">
                     <div class="demo-btn-left">
                         <img src="https://api.dicebear.com/7.x/bottts/svg?seed=rahul" alt="Rahul" class="demo-avatar">
                         <div>
-                            <div class="demo-name">Rahul Kumar (ഡെമോ 1)</div>
+                            <div class="demo-name">Rahul Kumar (Demo 1)</div>
                             <div class="demo-username">@rahul • rahul.demo@gmail.com</div>
                         </div>
                     </div>
@@ -49,7 +69,7 @@
                     <div class="demo-btn-left">
                         <img src="https://api.dicebear.com/7.x/bottts/svg?seed=anjali" alt="Anjali" class="demo-avatar">
                         <div>
-                            <div class="demo-name">Anjali Menon (ഡെമോ 2)</div>
+                            <div class="demo-name">Anjali Menon (Demo 2)</div>
                             <div class="demo-username">@anjali • anjali.demo@gmail.com</div>
                         </div>
                     </div>
@@ -57,37 +77,17 @@
                 </button>
             </div>
 
-            <div class="divider">അല്ലെങ്കിൽ നിങ്ങളുടെ Gmail ഉപയോഗിക്കുക</div>
-
-            <!-- Direct Gmail Login Form -->
-            <form id="gmailLoginForm" style="margin-bottom: 16px;">
-                <div class="form-group">
-                    <label class="form-label" for="gmailInput">📧 നിങ്ങളുടെ Gmail അഡ്രസ് നൽകുക:</label>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="email" id="gmailInput" class="form-input" placeholder="ഉദാ: name@gmail.com" required style="flex: 1;">
-                        <button type="submit" class="btn btn-primary" style="width: auto; padding: 0 18px; white-space: nowrap;">
-                            Login ➔
-                        </button>
-                    </div>
-                </div>
-            </form>
-
-            <!-- Google OAuth Official Sign-in Button (One-Tap) -->
-            <div class="google-signin-wrapper">
-                <div id="googleSignInBtn"></div>
-            </div>
-
-            <div class="divider">അല്ലെങ്കിൽ പുതിയ യൂസർ ഉണ്ടാക്കുക</div>
+            <div class="divider">or custom guest login</div>
 
             <!-- Custom Guest Login Form -->
             <form id="customLoginForm">
                 <div class="form-group">
-                    <label class="form-label" for="customNameInput">പേര് / Full Name</label>
-                    <input type="text" id="customNameInput" class="form-input" placeholder="e.g. Shihab" required>
+                    <label class="form-label" for="customNameInput">Your Name</label>
+                    <input type="text" id="customNameInput" class="form-input" placeholder="e.g. Alex" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label" for="customUsernameInput">യൂസർനെയിം / Username (English, letters & numbers)</label>
-                    <input type="text" id="customUsernameInput" class="form-input" placeholder="e.g. shihab24" required>
+                    <label class="form-label" for="customUsernameInput">Username (letters and numbers only)</label>
+                    <input type="text" id="customUsernameInput" class="form-input" placeholder="e.g. alex24" required>
                 </div>
                 <button type="submit" class="btn btn-secondary">Login with Custom Username</button>
             </form>
@@ -105,23 +105,23 @@
                     <div class="profile-meta">
                         <h3 id="userName">User</h3>
                         <p id="userUsername">@username</p>
-                        <p id="userEmail" style="font-size: 0.75rem; color: #64748b;"></p>
+                        <p id="userEmail" style="font-size: 0.75rem; color: #94a3b8;"></p>
                     </div>
                 </div>
                 <div class="profile-actions">
-                    <button id="copyUsernameBtn" class="btn-icon" title="Copy Username">📋 Copy ID</button>
+                    <button id="copyUsernameBtn" class="btn-icon" title="Copy Username">📋 Copy Username</button>
                     <button id="logoutBtn" class="btn-icon" title="Logout">🚪 Logout</button>
                 </div>
             </div>
 
-            <!-- Status Dot -->
+            <!-- Network Status Dot -->
             <div class="status-badge" id="networkStatusBadge">
-                <span class="status-dot connecting"></span> Connecting to network...
+                <span class="status-dot connecting"></span> Connecting to voice network...
             </div>
 
-            <!-- Quick Call Shortcut (e.g. Rahul -> Anjali or Anjali -> Rahul) -->
+            <!-- Quick Call Shortcut (for demo testing) -->
             <div id="quickCallContainer" class="quick-friend-box hidden">
-                <span class="quick-friend-text">ഡെമോ ഫ്രണ്ട് കോൾ:</span>
+                <span class="quick-friend-text">Quick Friend Call:</span>
                 <button id="quickCallBtn" class="btn btn-primary" style="width: auto; padding: 8px 16px; font-size: 0.85rem;" type="button">
                     📞 Quick Call
                 </button>
@@ -130,22 +130,23 @@
             <!-- Direct Call Form -->
             <form id="callForm">
                 <div class="form-group">
-                    <label class="form-label" for="targetUsernameInput">കോൾ ചെയ്യേണ്ട ഫ്രണ്ടിന്റെ Username നൽകുക:</label>
-                    <input type="text" id="targetUsernameInput" class="form-input" placeholder="ഉദാ: anjali അല്ലെങ്കിൽ rahul" autocomplete="off" required>
+                    <label class="form-label" for="targetUsernameInput">Enter Friend's Username to Call:</label>
+                    <input type="text" id="targetUsernameInput" class="form-input" placeholder="e.g. rahul, anjali, or signkipdesign" autocomplete="off" required>
                 </div>
                 <button type="submit" class="btn btn-success" id="makeCallBtn">
-                    📞 Call Request Send ചെയ്യുക
+                    📞 Send Voice Call Request
                 </button>
             </form>
 
-            <!-- Testing Instructions -->
+            <!-- How to test instruction card -->
             <div class="instruction-box">
-                <strong>💡 എങ്ങനെ ടെസ്റ്റ് ചെയ്യാം? (How to test):</strong>
+                <strong>💡 How to test between two accounts:</strong>
                 <ol>
-                    <li>ഈ ടാബിൽ <strong>Rahul</strong> ആയി ലോഗിൻ ചെയ്യുക.</li>
-                    <li>മറ്റൊരു <strong>Incognito window</strong> അല്ലെങ്കിൽ മൊബൈലിൽ ഈ ലിങ്ക് തുറന്ന് <strong>Anjali</strong> ആയി ലോഗിൻ ചെയ്യുക.</li>
-                    <li>Rahul-ന്റെ പേജിൽ നിന്ന് <strong>@anjali</strong> എന്ന് ടൈപ്പ് ചെയ്ത് Call Request അയക്കുക.</li>
-                    <li>Anjali-ക്ക് റിംഗ് ടോണോടെ കോൾ റിക്വസ്റ്റ് പോപ്പ് അപ്പ് വരും. <strong>Accept</strong> ചെയ്താൽ വോയ്‌സ് കോൾ കണക്ട് ആകും!</li>
+                    <li>Sign in with your Gmail on this tab (e.g. <strong>signkipdesign@gmail.com</strong>).</li>
+                    <li>Open an <strong>Incognito window</strong> or open on your <strong>mobile phone</strong>: <code style="color: #60a5fa;">https://signkipdesign-afk.github.io/my-friend/</code></li>
+                    <li>Sign in as <strong>Anjali</strong> (or another Gmail / guest name).</li>
+                    <li>From your tab, type <strong>anjali</strong> and click <strong>Send Voice Call Request</strong>.</li>
+                    <li>The other tab/phone rings with sound. Click <strong>Accept</strong> to start talking!</li>
                 </ol>
             </div>
         </section>
@@ -161,7 +162,7 @@
                 <img id="outgoingTargetAvatar" src="" alt="Target">
             </div>
             <h2 id="outgoingTargetName" class="call-target-title">Calling...</h2>
-            <p id="outgoingStatusText" class="call-target-subtitle">Ringing...</p>
+            <p id="outgoingStatusText" class="call-target-subtitle">Ringing friend's phone...</p>
             <button id="cancelOutgoingCallBtn" class="btn btn-danger" type="button">
                 🛑 Cancel Call
             </button>
@@ -178,7 +179,7 @@
                 <img id="incomingCallerAvatar" src="" alt="Caller">
             </div>
             <h2 id="incomingCallerName" class="call-target-title">Caller Name</h2>
-            <p id="incomingCallerUsername" class="call-target-subtitle" style="color: #6ee7b7;">ഇൻകമിംഗ് വോയ്‌സ് കോൾ...</p>
+            <p id="incomingCallerUsername" class="call-target-subtitle" style="color: #6ee7b7;">Incoming Voice Call Request...</p>
             
             <div class="incoming-buttons-row">
                 <button id="declineCallBtn" class="btn btn-danger" type="button">
@@ -230,10 +231,10 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
-    <!-- Scripts -->
-    <script src="js/peerjs.min.js"></script>
-    <script src="js/sound.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/app.js"></script>
+    <!-- Scripts with Cache-Busting Version Query -->
+    <script src="js/peerjs.min.js?v=3"></script>
+    <script src="js/sound.js?v=3"></script>
+    <script src="js/auth.js?v=3"></script>
+    <script src="js/app.js?v=3"></script>
 </body>
 </html>

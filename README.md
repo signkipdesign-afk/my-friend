@@ -1,65 +1,59 @@
-# 📞 MyFriend - Web Audio Calling App (ഫ്രണ്ട്സ് വോയ്‌സ് കോളിംഗ് ആപ്പ്)
+# 📞 MyFriend - Web Voice Calling App
 
-ഒരു ലളിതമായ വെബ് അധിഷ്ഠിത പിയർ-ടു-പിയർ (Peer-to-Peer) വോയ്‌സ് കോളിംഗ് ആപ്ലിക്കേഷൻ. യൂസർമാർക്ക് ഗൂഗിൾ (Gmail) അക്കൗണ്ട് വഴിയോ പ്രീ-കോൺഫിഗർ ചെയ്ത ഡെമോ അക്കൗണ്ടുകൾ വഴിയോ ലോഗിൻ ചെയ്യാം. ഒരു സുഹൃത്തിന്റെ യൂസർനെയിം നൽകി കോൾ റിക്വസ്റ്റ് അയക്കുകയും, അവർ അത് അക്സെപ്റ്റ് ചെയ്യുമ്പോൾ മാത്രം ഹൈ-ക്വാളിറ്റി ഓഡിയോ കോൾ കണക്റ്റ് ആവുകയും ചെയ്യുന്നു.
-
----
-
-## 🌟 പ്രധാന പ്രത്യേകതകൾ (Features)
-
-1. **ലോഗിൻ സംവിധാനം (Authentication)**:
-   - **2 ഡെമോ അക്കൗണ്ടുകൾ (Pre-configured Demo Accounts)**:
-     - 👤 **ഡെമോ 1**: `Rahul` (Username: `@rahul`, Email: `rahul.demo@gmail.com`)
-     - 👤 **ഡെമോ 2**: `Anjali` (Username: `@anjali`, Email: `anjali.demo@gmail.com`)
-     - ഒരു ക്ലിക്കിൽ ഉടനടി ലോഗിൻ ചെയ്യാം.
-   - **Google Sign-In (Gmail)**:
-     - ഔദ്യോഗിക Google Identity Services ഉപയോഗിച്ച് Gmail അക്കൗണ്ട് വഴി നേരിട്ട് ലോഗിൻ ചെയ്യാം.
-   - **Custom Guest Login**:
-     - ഇഷ്ടമുള്ള പേരും യൂസർനെയിമും നൽകി കൂടുതൽ ഡിവൈസുകളിൽ ടെസ്റ്റ് ചെയ്യാം.
-
-2. **കോളിംഗ് ഫ്ലോ (Audio Calling Flow)**:
-   - സുഹൃത്തിന്റെ Username ടൈപ്പ് ചെയ്ത് **Call Request** അയക്കുന്നു.
-   - കോൾ പോകുമ്പോൾ Caller-ന് ഡയൽ ടോണും (Outgoing Ring), സ്വീകർത്താവിന് ഇൻകമിംഗ് ബെൽ റിംഗ് ടോണും കേൾക്കാം.
-   - സ്വീകർത്താവിന് **Accept**, **Decline** ബട്ടണുകളോട് കൂടിയ പോപ്പ്-അപ്പ് ലഭിക്കുന്നു.
-   - **Accept** ചെയ്താൽ മാത്രം WebRTC വഴി ലൈവ് ഓഡിയോ കോൾ ആരംഭിക്കുന്നു.
-   - **Decline** ചെയ്താൽ കോൾ ക്യാൻസൽ ആവുകയും Caller-ന് നോട്ടിഫിക്കേഷൻ ലഭിക്കുകയും ചെയ്യും.
-
-3. **ഓഡിയോ നിയന്ത്രണങ്ങൾ (Call Controls)**:
-   - 🎙️ മൈക്രോഫോൺ **Mute / Unmute** ബട്ടൺ.
-   - ⏱️ ലൈവ് കോൾ ഡ്യൂറേഷൻ ടൈമർ (00:01, 00:02...).
-   - 🌊 ലൈവ് സൗണ്ട് വേവ് വിഷ്വലൈസർ (Web Audio API Analyser).
-   - 🛑 സുരക്ഷിതമായി കോൾ കട്ട് ചെയ്യാനുള്ള **End Call** ബട്ടൺ.
-
-4. **സീറോ ബാക്കെൻഡ് ഡിപൻഡൻസി (Serverless WebRTC)**:
-   - പിയർJS (PeerJS) ക്ലൗഡ് സിഗ്നലിംഗ് ഉപയോഗിക്കുന്നതിനാൽ പ്രത്യേക ബാക്കെൻഡ് സെർവറുകളുടെ ആവശ്യമില്ല.
-   - GitHub Pages-ലോ മറ്റേതെങ്കിലും സ്റ്റാറ്റിക് വെബ് ഹോസ്റ്റിംഗിലോ സൗജന്യമായി ഹോസ്റ്റ് ചെയ്യാം.
+A modern, fast, and simple peer-to-peer (P2P) voice calling web application built with WebRTC. Users can sign in with their Gmail address or use pre-configured demo accounts. Enter a friend's username to send a voice call request, and start talking once they accept the call.
 
 ---
 
-## 🚀 ലൈവ് വെബ്സൈറ്റ് ലിങ്ക് (Live Preview)
+## 🌟 Features
 
-GitHub Pages ഓട്ടോമാറ്റിക് ഡിപ്ലോയ്മെന്റ് വഴി ആപ്പ് ലൈവ് ആയി കാണാം:
+1. **Authentication**:
+   - **Gmail Sign In**: Enter your Gmail address (e.g. `signkipdesign@gmail.com`) to instantly create your profile and start calling.
+   - **2 Demo Accounts**:
+     - 👤 **Demo 1**: Rahul Kumar (`@rahul` • `rahul.demo@gmail.com`)
+     - 👤 **Demo 2**: Anjali Menon (`@anjali` • `anjali.demo@gmail.com`)
+   - **Custom Guest Login**: Enter any display name and custom username.
+
+2. **Call Request & Acceptance Flow**:
+   - Type your friend's username and click **Send Voice Call Request**.
+   - Caller hears outgoing dial tone; receiver's phone/browser plays pleasant incoming ringtone.
+   - Receiver receives an incoming call modal with **Accept** and **Decline** options.
+   - Voice call connects only after the receiver clicks **Accept**.
+   - If declined, caller receives an instant notification and dial tone stops.
+
+3. **In-Call Controls**:
+   - 🎙️ **Mute / Unmute** microphone toggle.
+   - ⏱️ Live call duration timer (`00:01`, `00:02`...).
+   - 🌊 Real-time voice waveform visualizer (Web Audio API Analyser).
+   - 🛑 **End Call** button.
+
+4. **Serverless Architecture**:
+   - Powered by WebRTC and PeerJS cloud signaling.
+   - Runs client-side on GitHub Pages with HTTPS for crystal-clear microphone audio.
+
+---
+
+## 🚀 Live Website
+
+Access the live application at:
 👉 **[https://signkipdesign-afk.github.io/my-friend/](https://signkipdesign-afk.github.io/my-friend/)**
 
-*(ശ്രദ്ധിക്കുക: ആദ്യ തവണ GitHub-ൽ Settings -> Pages -> Source എന്നത് "GitHub Actions" എന്ന് സെലക്ട് ചെയ്യുക)*
-
 ---
 
-## 💻 ലോക്കലായി റൺ ചെയ്യുന്ന വിധം (Run Locally)
+## 💻 Run Locally
 
-1. വിൻഡോസ് കമ്പ്യൂട്ടറിൽ **`start.bat`** ഫയലിൽ ഡബിൾ ക്ലിക്ക് ചെയ്യുക.
-   അല്ലെങ്കിൽ ടെർമിനലിൽ / പവർഷെല്ലിൽ താഴെ പറയുന്ന കമാൻഡ് റൺ ചെയ്യുക:
+1. On Windows, double-click **`start.bat`**.
+   Or run the following PowerShell command in the project directory:
    ```powershell
    powershell -ExecutionPolicy Bypass -File server.ps1
    ```
-2. നിങ്ങളുടെ ബ്രൗസറിൽ തനിയെ `http://localhost:3000` ഓപ്പൺ ആകും.
+2. Your default browser will automatically open `http://localhost:3000`.
 
 ---
 
-## 🧪 എങ്ങനെ രണ്ട് അക്കൗണ്ടുകൾ തമ്മിൽ ടെസ്റ്റ് ചെയ്യാം? (Testing Guide)
+## 🧪 Testing Between Two Accounts
 
-1. ബ്രൗസറിലെ ആദ്യ ടാബിൽ **`Rahul`** ആയി ലോഗിൻ ചെയ്യുക.
-2. രണ്ടാമതൊരു **Incognito window (Private Window)** തുറക്കുകയോ അല്ലെങ്കിൽ മൊബൈൽ ഫോണിൽ സൈറ്റ് തുറക്കുകയോ ചെയ്യുക.
-3. അവിടെ **`Anjali`** ആയി ലോഗിൻ ചെയ്യുക.
-4. Rahul-ന്റെ സ്ക്രീനിൽ നിന്ന് **`@anjali`** എന്ന് ടൈപ്പ് ചെയ്ത് **Call Request Send** ചെയ്യുക (അല്ലെങ്കിൽ മുകളിലുള്ള **Quick Call** ബട്ടൺ അമർത്തുക).
-5. Anjali-യുടെ സ്ക്രീനിൽ റിംഗിംഗ് ടോണോടെ ഇൻകമിംഗ് കോൾ റിക്വസ്റ്റ് വരും.
-6. **Accept** അമർത്തുമ്പോൾ മൈക്രോഫോൺ പെർമിഷൻ അലൗ ചെയ്യുക. കോൾ കണക്റ്റ് ആവുകയും രണ്ട് പേർക്കും പരസ്പരം സംസാരിക്കാൻ സാധിക്കുകയും ചെയ്യും!
+1. In Tab 1, enter your Gmail: **`signkipdesign@gmail.com`** and click **Sign In**.
+2. Open an **Incognito window (Private Tab)** or open the link on your mobile phone: `https://signkipdesign-afk.github.io/my-friend/`
+3. Sign in as **Anjali** (or another demo account).
+4. From your tab, enter **`anjali`** and click **Send Voice Call Request**.
+5. The other tab/device will ring with sound. Click **Accept** to connect the call!
