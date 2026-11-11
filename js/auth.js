@@ -30,8 +30,8 @@ class AuthManager {
     }
 
     init() {
-        // Check session storage first (allows testing 2 tabs on same browser), fallback to local storage
-        const saved = sessionStorage.getItem(this.storageKey) || localStorage.getItem(this.storageKey);
+        // Use session storage for clean tab-level session isolation
+        const saved = sessionStorage.getItem(this.storageKey);
         if (saved) {
             try {
                 this.currentUser = JSON.parse(saved);
@@ -142,7 +142,6 @@ class AuthManager {
     setUser(user) {
         this.currentUser = user;
         sessionStorage.setItem(this.storageKey, JSON.stringify(user));
-        localStorage.setItem(this.storageKey, JSON.stringify(user));
     }
 
     logout() {

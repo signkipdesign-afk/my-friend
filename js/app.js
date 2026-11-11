@@ -1,9 +1,10 @@
-// Main Application Logic: WebRTC Voice & Video Calling, PeerJS, Audio/Video Controls, Friends System & UI State
+// Main Application Logic: Robust WebRTC Voice & Video Calling, PeerJS, Audio/Video Controls, Friends System & UI State
 
 class CallApp {
     constructor() {
         this.peer = null;
         this.currentCall = null;
+        this.pendingIncomingCall = null;
         this.currentDataConn = null;
         this.localStream = null;
         
@@ -15,7 +16,6 @@ class CallApp {
         // Call state
         this.callState = 'idle'; // idle | calling | incoming | connected
         this.currentCallType = 'audio'; // 'audio' | 'video'
-        this.incomingCallType = 'audio';
         this.callTimerInterval = null;
         this.callSeconds = 0;
         this.isMuted = false;
@@ -57,9 +57,8 @@ class CallApp {
                 clearInterval(checkGsi);
                 try {
                     const clientId = window.GOOGLE_CLIENT_ID || "";
-                    if (!clientId) {
-                        return; // Use direct Gmail login if no client ID is set
-                    }
+                    if (!clientId) return;
+
                     window.google.accounts.id.initialize({
                         client_id: clientId,
                         callback: (res) => this.onGoogleSignInSuccess(res),
@@ -173,18 +172,21 @@ class CallApp {
         });
     }
 
+    parseUsername(query) {
+        if (!query) return '';
+        let clean = query.trim().toLowerCase();
+        if (clean.includes('@')) {
+            clean = clean.split('@')[0];
+        }
+        return clean.replace(/[^a-z0-9_-]/g, '');
+    }
+
     sendFriendRequest(targetQuery) {
         const currentUser = authManager.getUser();
         if (!currentUser) return;
 
-        let targetUsername = targetQuery;
-        let targetEmail = targetQuery;
-        if (targetQuery.includes('@')) {
-            targetUsername = targetQuery.split('@')[0].replace(/[^a-z0-9_-]/g, '');
-        } else {
-            targetUsername = targetQuery.replace(/[^a-z0-9_-]/g, '');
-            targetEmail = `${targetUsername}@gmail.com`;
-        }
+        const targetUsername = this.parseUsername(targetQuery);
+        let targetEmail = targetQuery.includes('@') ? targetQuery.trim().toLowerCase() : `${targetUsername}@gmail.com`;
 
         if (!targetUsername) {
             this.showToast("Please enter a valid Gmail address or username", 'error');
@@ -362,13 +364,15 @@ class CallApp {
     bindCallEvents() {
         // Direct Audio Call
         document.getElementById('makeCallBtn')?.addEventListener('click', () => {
-            const targetUsername = document.getElementById('targetUsernameInput').value.trim().toLowerCase();
+            const raw = document.getElementById('targetUsernameInput').value;
+            const targetUsername = this.parseUsername(raw);
             this.startOutgoingCall(targetUsername, 'audio');
         });
 
         // Direct Video Call
         document.getElementById('makeVideoCallBtn')?.addEventListener('click', () => {
-            const targetUsername = document.getElementById('targetUsernameInput').value.trim().toLowerCase();
+            const raw = document.getElementById('targetUsernameInput').value;
+            const targetUsername = this.parseUsername(raw);
             this.startOutgoingCall(targetUsername, 'video');
         });
 
@@ -441,7 +445,8 @@ class CallApp {
     }
 
     formatPeerId(username) {
-        return `myfriend_v1_${username.toLowerCase()}`;
+        const clean = this.parseUsername(username);
+        return `myfriend_v2_${clean}`;
     }
 
     initPeer(username) {
@@ -454,13 +459,16 @@ class CallApp {
         statusBadge.innerHTML = `<span class="status-dot connecting"></span> Connecting to network...`;
 
         try {
+            // Enhanced STUN configuration for reliable cross-network P2P connections
             this.peer = new Peer(peerId, {
                 debug: 1,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
                         { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' }
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun.cloudflare.com:3478' },
+                        { urls: 'stun:global.stun.twilio.com:3478' }
                     ]
                 }
             });
@@ -471,18 +479,21 @@ class CallApp {
                 this.showToast("Voice & Video network connected 🟢", 'success');
             });
 
+            // Handle incoming data connections (e.g. friend requests, signals)
             this.peer.on('connection', (conn) => {
                 this.handleIncomingDataConnection(conn);
             });
 
-            this.peer.on('call', (mediaCall) => {
-                this.handleIncomingMediaCall(mediaCall);
+            // Handle incoming media calls (WebRTC Audio/Video calls)
+            this.peer.on('call', (incomingCall) => {
+                this.handleIncomingCallOffer(incomingCall);
             });
 
             this.peer.on('error', (err) => {
                 console.error("PeerJS error:", err);
                 if (err.type === 'unavailable-id') {
                     statusBadge.innerHTML = `<span class="status-dot online"></span> Active in another tab`;
+                    this.showToast(`Account @${username} is active in another tab.`, 'warning');
                 } else if (err.type === 'peer-unavailable') {
                     this.showToast("Friend is currently offline or username not found.", 'error');
                     this.cancelOutgoingCall("User is currently offline.");
@@ -504,69 +515,43 @@ class CallApp {
         }
     }
 
-    // Step 1: Handle Incoming Signal / Data Connection
+    // Handle Incoming Data Signals
     handleIncomingDataConnection(conn) {
         conn.on('data', (data) => {
-            console.log("Received peer signal:", data);
+            console.log("Received data signal:", data);
 
-            // Friend Request Handshake
             if (data.type === 'FRIEND_REQUEST') {
                 authManager.addPendingRequest(data.sender);
                 this.renderPendingRequests();
                 this.showToast(`New Friend Request from ${data.sender.name || data.sender.email}! 📬`, 'info');
-                return;
             }
             else if (data.type === 'FRIEND_REQUEST_ACCEPTED') {
                 authManager.addFriend(data.sender);
                 this.renderFriendsList();
                 this.showToast(`${data.sender.name || data.sender.email} accepted your friend request! 🟢`, 'success');
-                return;
             }
-            
-            // Call Handshake (Audio or Video)
-            if (data.type === 'CALL_REQUEST') {
-                if (this.callState !== 'idle') {
-                    conn.send({ type: 'CALL_BUSY' });
-                    return;
-                }
-                this.activeCaller = data.caller;
-                this.incomingCallType = data.callType || 'audio';
-                this.currentDataConn = conn;
-                this.showIncomingCallScreen(data.caller, this.incomingCallType);
-            } 
-            else if (data.type === 'CALL_ACCEPTED') {
-                this.onOutgoingCallAccepted(data.callType || this.currentCallType);
-            } 
             else if (data.type === 'CALL_DECLINED') {
                 this.cancelOutgoingCall("Friend declined the call.");
-            } 
+            }
             else if (data.type === 'CALL_BUSY') {
                 this.cancelOutgoingCall("Friend is busy on another call.");
-            } 
-            else if (data.type === 'CALL_ENDED') {
-                this.hangupCall("Friend ended the call.");
-            }
-        });
-
-        conn.on('close', () => {
-            if (this.callState === 'calling' || this.callState === 'connected') {
-                this.hangupCall("Call disconnected");
             }
         });
     }
 
-    // Step 2: Outgoing Call Flow (Supports 'audio' and 'video')
-    startOutgoingCall(targetUsername, callType = 'audio') {
+    // ==========================================
+    // CALL LIFECYCLE (CALLER & RECEIVER)
+    // ==========================================
+
+    // Step 1: Caller Starts Outgoing Call
+    async startOutgoingCall(targetUsername, callType = 'audio') {
         const currentUser = authManager.getUser();
         if (!currentUser) return;
 
-        let cleanTarget = targetUsername.toLowerCase().trim().replace('@', '');
-        if (cleanTarget.includes('@')) {
-            cleanTarget = cleanTarget.split('@')[0].replace(/[^a-z0-9_-]/g, '');
-        }
+        const cleanTarget = this.parseUsername(targetUsername);
 
         if (!cleanTarget) {
-            this.showToast("Please enter a valid friend's username", 'error');
+            this.showToast("Please enter a valid friend's username or Gmail", 'error');
             return;
         }
 
@@ -594,50 +579,86 @@ class CallApp {
         document.getElementById('outgoingTargetName').textContent = `@${cleanTarget}`;
         document.getElementById('outgoingTargetAvatar').src = `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanTarget}`;
         document.getElementById('outgoingStatusText').textContent = callType === 'video' 
-            ? "Requesting high-definition video call..." 
-            : "Requesting voice call...";
+            ? "Requesting video call..." 
+            : "Requesting audio call...";
         document.getElementById('outgoingCallModal').classList.remove('hidden');
 
         // Play Outgoing Ring Sound
         soundEffects.playOutgoingRing();
 
-        // Connect Data Channel to send Call Request
-        const remotePeerId = this.formatPeerId(cleanTarget);
-        this.currentDataConn = this.peer.connect(remotePeerId, { reliable: true });
+        // 1. Acquire Caller Media Stream
+        const isVideo = callType === 'video';
+        const constraints = {
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: isVideo ? { facingMode: 'user' } : false
+        };
 
-        this.currentDataConn.on('open', () => {
-            document.getElementById('outgoingStatusText').textContent = "Ringing friend's phone...";
-            this.currentDataConn.send({
-                type: 'CALL_REQUEST',
-                callType: callType,
-                caller: currentUser
+        try {
+            try {
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (mediaErr) {
+                if (isVideo) {
+                    console.warn("Camera unavailable, falling back to audio only:", mediaErr);
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                } else {
+                    throw mediaErr;
+                }
+            }
+
+            if (this.localStream.getVideoTracks().length > 0) {
+                this.isCameraOn = true;
+                if (this.localVideoEl) {
+                    this.localVideoEl.srcObject = this.localStream;
+                    this.localVideoEl.play().catch(e => {});
+                }
+            } else {
+                this.isCameraOn = false;
+            }
+
+            // 2. Initiate WebRTC Call with stream and metadata
+            const remotePeerId = this.formatPeerId(cleanTarget);
+            console.log("Calling remote peer:", remotePeerId);
+
+            this.currentCall = this.peer.call(remotePeerId, this.localStream, {
+                metadata: {
+                    caller: currentUser,
+                    callType: callType
+                }
             });
-        });
 
-        this.currentDataConn.on('data', (data) => {
-            if (data.type === 'CALL_ACCEPTED') {
-                this.onOutgoingCallAccepted(data.callType || this.currentCallType);
-            } else if (data.type === 'CALL_DECLINED') {
-                this.cancelOutgoingCall("Friend declined the call.");
-            } else if (data.type === 'CALL_BUSY') {
-                this.cancelOutgoingCall("Friend is busy on another call.");
-            } else if (data.type === 'CALL_ENDED') {
+            this.currentCall.on('stream', (remoteStream) => {
+                console.log("Caller received remote stream!");
+                this.handleRemoteStream(remoteStream);
+                const targetInfo = {
+                    name: `@${this.activeTarget}`,
+                    username: this.activeTarget,
+                    avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${this.activeTarget}`
+                };
+                this.setupConnectedCallView(targetInfo, this.currentCallType);
+            });
+
+            this.currentCall.on('close', () => {
                 this.hangupCall("Call ended");
-            }
-        });
+            });
 
-        this.currentDataConn.on('error', (err) => {
-            console.error("Data connection error:", err);
-            this.cancelOutgoingCall("Friend is offline or unavailable.");
-        });
+            this.currentCall.on('error', (err) => {
+                console.error("Outgoing media call error:", err);
+                this.cancelOutgoingCall("Call connection error.");
+            });
 
-        // 35s Ringing Timeout
-        if (this.ringTimeout) clearTimeout(this.ringTimeout);
-        this.ringTimeout = setTimeout(() => {
-            if (this.callState === 'calling') {
-                this.cancelOutgoingCall("No answer from friend.");
-            }
-        }, 35000);
+            // 35s Ringing Timeout
+            if (this.ringTimeout) clearTimeout(this.ringTimeout);
+            this.ringTimeout = setTimeout(() => {
+                if (this.callState === 'calling') {
+                    this.cancelOutgoingCall("No answer from friend.");
+                }
+            }, 35000);
+
+        } catch (err) {
+            console.error("Caller media acquisition error:", err);
+            this.showToast("Microphone/Camera permission denied. Cannot place call.", 'error');
+            this.cancelOutgoingCall("Permission denied");
+        }
     }
 
     cancelOutgoingCall(reason = "Call cancelled") {
@@ -645,20 +666,35 @@ class CallApp {
         soundEffects.stopAll();
         soundEffects.playEndSound();
 
-        if (this.currentDataConn && this.currentDataConn.open) {
-            this.currentDataConn.send({ type: 'CALL_CANCELLED' });
-            this.currentDataConn.close();
+        if (this.currentCall) {
+            this.currentCall.close();
+            this.currentCall = null;
         }
 
         this.cleanupCall();
         this.showToast(reason, 'info');
     }
 
-    // Step 3: Incoming Call Screen
-    showIncomingCallScreen(caller, callType = 'audio') {
-        this.callState = 'incoming';
-        this.incomingCallType = callType;
+    // Step 2: Receiver receives call offer
+    handleIncomingCallOffer(incomingCall) {
+        console.log("Received incoming call offer:", incomingCall);
 
+        if (this.callState !== 'idle') {
+            // Already on a call: reject
+            incomingCall.close();
+            return;
+        }
+
+        const metadata = incomingCall.metadata || {};
+        const caller = metadata.caller || { name: 'Friend', username: 'friend' };
+        const callType = metadata.callType || 'audio';
+
+        this.pendingIncomingCall = incomingCall;
+        this.activeCaller = caller;
+        this.currentCallType = callType;
+        this.callState = 'incoming';
+
+        // UI Incoming Modal
         const badge = document.getElementById('incomingCallTypeBadge');
         if (badge) {
             badge.textContent = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Audio Call';
@@ -681,33 +717,20 @@ class CallApp {
         }, 35000);
     }
 
-    declineIncomingCall(message = "Call declined") {
-        if (this.ringTimeout) clearTimeout(this.ringTimeout);
-        soundEffects.stopAll();
-        soundEffects.playEndSound();
-
-        if (this.currentDataConn && this.currentDataConn.open) {
-            this.currentDataConn.send({ type: 'CALL_DECLINED' });
-            this.currentDataConn.close();
-        }
-
-        this.cleanupCall();
-        this.showToast(message, 'info');
-    }
-
-    // Step 4: Accept Call (Receiver Side)
+    // Step 3: Receiver clicks Accept
     async acceptIncomingCall() {
         if (this.ringTimeout) clearTimeout(this.ringTimeout);
         soundEffects.stopAll();
 
-        const isVideo = this.incomingCallType === 'video';
+        if (!this.pendingIncomingCall) {
+            this.cleanupCall();
+            return;
+        }
+
+        const isVideo = this.currentCallType === 'video';
         const constraints = {
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            },
-            video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: isVideo ? { facingMode: 'user' } : false
         };
 
         try {
@@ -715,104 +738,7 @@ class CallApp {
                 this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             } catch (mediaErr) {
                 if (isVideo) {
-                    console.warn("Video camera unavailable, falling back to audio only:", mediaErr);
-                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                } else {
-                    throw mediaErr;
-                }
-            }
-
-            // Setup local video element if video track exists
-            if (this.localStream.getVideoTracks().length > 0) {
-                this.isCameraOn = true;
-                if (this.localVideoEl) {
-                    this.localVideoEl.srcObject = this.localStream;
-                    this.localVideoEl.play().catch(e => console.log("Local video play notice:", e));
-                }
-            } else {
-                this.isCameraOn = false;
-            }
-
-            // Signal caller that call is accepted
-            if (this.currentDataConn && this.currentDataConn.open) {
-                this.currentDataConn.send({
-                    type: 'CALL_ACCEPTED',
-                    callType: this.incomingCallType
-                });
-            }
-
-            document.getElementById('incomingCallModal').classList.add('hidden');
-            this.setupConnectedCallView(this.activeCaller, this.incomingCallType);
-
-        } catch (err) {
-            console.error("Media permission error:", err);
-            this.showToast("Microphone/Camera access required. Please grant browser permissions.", 'error');
-            this.declineIncomingCall("Could not access media devices.");
-        }
-    }
-
-    // Incoming Media Call Handler
-    handleIncomingMediaCall(mediaCall) {
-        console.log("Incoming WebRTC media call from peer...");
-        this.currentCall = mediaCall;
-
-        if (this.localStream) {
-            mediaCall.answer(this.localStream);
-        } else {
-            const isVideo = this.incomingCallType === 'video';
-            navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
-            }).then(stream => {
-                this.localStream = stream;
-                if (stream.getVideoTracks().length > 0) {
-                    this.isCameraOn = true;
-                    if (this.localVideoEl) {
-                        this.localVideoEl.srcObject = stream;
-                        this.localVideoEl.play().catch(e => {});
-                    }
-                }
-                mediaCall.answer(stream);
-            }).catch(err => {
-                console.error("Failed to acquire stream to answer:", err);
-            });
-        }
-
-        mediaCall.on('stream', (remoteStream) => {
-            this.handleRemoteStream(remoteStream);
-        });
-
-        mediaCall.on('close', () => {
-            this.hangupCall("Call ended");
-        });
-
-        mediaCall.on('error', (err) => {
-            console.error("Media call error:", err);
-            this.hangupCall("Call encountered an error");
-        });
-    }
-
-    // Step 5: Caller handles accepted call
-    async onOutgoingCallAccepted(callType = this.currentCallType) {
-        if (this.ringTimeout) clearTimeout(this.ringTimeout);
-        soundEffects.stopAll();
-
-        const isVideo = callType === 'video';
-        const constraints = {
-            audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
-            },
-            video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
-        };
-
-        try {
-            try {
-                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            } catch (mediaErr) {
-                if (isVideo) {
-                    console.warn("Camera unavailable, fallback to audio:", mediaErr);
+                    console.warn("Video camera unavailable, fallback to audio:", mediaErr);
                     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
                 } else {
                     throw mediaErr;
@@ -829,13 +755,14 @@ class CallApp {
                 this.isCameraOn = false;
             }
 
-            const remotePeerId = this.formatPeerId(this.activeTarget);
-            console.log("Calling remote media peer:", remotePeerId);
-            
-            // Initiate WebRTC Call with localStream
-            this.currentCall = this.peer.call(remotePeerId, this.localStream);
+            this.currentCall = this.pendingIncomingCall;
+            this.pendingIncomingCall = null;
+
+            // Answer the call with local stream
+            this.currentCall.answer(this.localStream);
 
             this.currentCall.on('stream', (remoteStream) => {
+                console.log("Receiver received remote stream!");
                 this.handleRemoteStream(remoteStream);
             });
 
@@ -844,47 +771,58 @@ class CallApp {
             });
 
             this.currentCall.on('error', (err) => {
-                console.error("Outgoing media call error:", err);
-                this.hangupCall("Connection failed");
+                console.error("Media call error:", err);
+                this.hangupCall("Call connection error");
             });
 
-            const targetInfo = {
-                name: `@${this.activeTarget}`,
-                username: this.activeTarget,
-                avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${this.activeTarget}`
-            };
-            this.setupConnectedCallView(targetInfo, callType);
+            document.getElementById('incomingCallModal').classList.add('hidden');
+            this.setupConnectedCallView(this.activeCaller, this.currentCallType);
 
         } catch (err) {
-            console.error("Caller media error:", err);
-            this.showToast("Microphone/Camera permission denied. Cannot start call.", 'error');
-            this.cancelOutgoingCall("Permission denied");
+            console.error("Receiver media error:", err);
+            this.showToast("Microphone/Camera permission required. Please allow browser permissions.", 'error');
+            this.declineIncomingCall("Could not access media devices.");
         }
     }
 
-    // Step 6: Handle connected remote audio and video stream
+    // Step 4: Receiver clicks Decline
+    declineIncomingCall(message = "Call declined") {
+        if (this.ringTimeout) clearTimeout(this.ringTimeout);
+        soundEffects.stopAll();
+        soundEffects.playEndSound();
+
+        if (this.pendingIncomingCall) {
+            this.pendingIncomingCall.close();
+            this.pendingIncomingCall = null;
+        }
+
+        this.cleanupCall();
+        this.showToast(message, 'info');
+    }
+
+    // Step 5: Handle Connected Remote Stream (Audio / Video)
     handleRemoteStream(remoteStream) {
-        console.log("Remote media stream connected!");
+        console.log("Setting up remote audio & video elements...");
         soundEffects.playConnectedSound();
 
-        // Attach audio
+        // 1. Play audio
         if (this.remoteAudioEl) {
             this.remoteAudioEl.srcObject = remoteStream;
-            this.remoteAudioEl.play().catch(e => console.log("Audio play allowed on user interaction:", e));
+            this.remoteAudioEl.play().catch(e => console.log("Audio play catch:", e));
         }
 
         const hasRemoteVideo = remoteStream.getVideoTracks().length > 0;
         const hasLocalVideo = this.localStream && this.localStream.getVideoTracks().length > 0;
 
         if (hasRemoteVideo || hasLocalVideo) {
-            // Switch to Video Mode UI
+            // Video Mode
             document.getElementById('activeCallCard').classList.add('video-mode');
             document.getElementById('videoStage').classList.remove('hidden');
             document.getElementById('audioStage').classList.add('hidden');
 
             if (this.remoteVideoEl) {
                 this.remoteVideoEl.srcObject = remoteStream;
-                this.remoteVideoEl.play().catch(e => console.log("Remote video play notice:", e));
+                this.remoteVideoEl.play().catch(e => console.log("Remote video play catch:", e));
             }
         } else {
             // Audio-only Mode
@@ -898,7 +836,7 @@ class CallApp {
         this.updateCameraUI();
     }
 
-    // Step 7: Connected Call Screen & Timer
+    // Step 6: Connected Call Screen & Timer
     setupConnectedCallView(remoteUser, callType = 'audio') {
         this.callState = 'connected';
         this.hideAllCallOverlays();
@@ -910,7 +848,6 @@ class CallApp {
 
         activeModal.classList.remove('hidden');
 
-        // Populate names & avatars
         document.getElementById('connectedAvatar').src = remoteUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${remoteUser.username}`;
         document.getElementById('connectedName').textContent = remoteUser.name || `@${remoteUser.username}`;
         document.getElementById('connectedUsername').textContent = `@${remoteUser.username}`;
@@ -926,7 +863,7 @@ class CallApp {
             audioStage.classList.remove('hidden');
         }
 
-        // Reset and start call timer
+        // Call duration timer
         this.callSeconds = 0;
         this.updateTimerDisplay();
         if (this.callTimerInterval) clearInterval(this.callTimerInterval);
@@ -935,7 +872,6 @@ class CallApp {
             this.updateTimerDisplay();
         }, 1000);
 
-        // Control states
         this.isMuted = false;
         this.updateMuteUI();
         this.updateCameraUI();
@@ -993,10 +929,10 @@ class CallApp {
             this.updateCameraUI();
             this.showToast(this.isCameraOn ? "Camera Turned On 📹" : "Camera Turned Off 🚫", 'info');
         } else {
-            // Did not have video track: dynamically request camera stream
+            // Request camera stream and attach to peer connection
             try {
                 const newStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+                    video: { facingMode: 'user' }
                 });
                 const newVideoTrack = newStream.getVideoTracks()[0];
                 this.localStream.addTrack(newVideoTrack);
@@ -1006,7 +942,6 @@ class CallApp {
                     this.localVideoEl.play().catch(e => {});
                 }
 
-                // Add to WebRTC peer connection
                 if (this.currentCall && this.currentCall.peerConnection) {
                     const senders = this.currentCall.peerConnection.getSenders();
                     const videoSender = senders.find(s => s.track && s.track.kind === 'video');
@@ -1017,7 +952,6 @@ class CallApp {
                     }
                 }
 
-                // Switch UI to Video Mode
                 document.getElementById('activeCallCard').classList.add('video-mode');
                 document.getElementById('videoStage').classList.remove('hidden');
                 document.getElementById('audioStage').classList.add('hidden');
@@ -1089,7 +1023,7 @@ class CallApp {
             };
             draw();
         } catch (e) {
-            console.log("Audio visualizer initialization:", e);
+            console.log("Audio visualizer notice:", e);
         }
     }
 
@@ -1104,12 +1038,8 @@ class CallApp {
         }
     }
 
-    // Step 8: Hangup Call
+    // Step 7: Hangup Call
     hangupCall(toastReason = "Call ended") {
-        if (this.currentDataConn && this.currentDataConn.open) {
-            this.currentDataConn.send({ type: 'CALL_ENDED' });
-        }
-
         soundEffects.stopAll();
         soundEffects.playEndSound();
 
@@ -1145,9 +1075,9 @@ class CallApp {
             this.currentCall = null;
         }
 
-        if (this.currentDataConn) {
-            this.currentDataConn.close();
-            this.currentDataConn = null;
+        if (this.pendingIncomingCall) {
+            this.pendingIncomingCall.close();
+            this.pendingIncomingCall = null;
         }
 
         if (this.remoteAudioEl) {
