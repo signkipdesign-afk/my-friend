@@ -785,3 +785,137 @@ body {
     from { opacity: 0; transform: translateY(-5px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+
+/* Video Calling Styles */
+.call-modal-card.video-mode {
+    max-width: 720px;
+    width: 95vw;
+    height: 82vh;
+    max-height: 740px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: #0b1120;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+.video-stage {
+    position: relative;
+    width: 100%;
+    flex: 1;
+    min-height: 200px;
+    background: #030712;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.remote-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #020617;
+}
+
+.local-video-pip {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: 110px;
+    height: 145px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+    background: #1e293b;
+    z-index: 10;
+    transform: scaleX(-1);
+    transition: transform 0.2s;
+}
+
+.local-video-pip:hover {
+    transform: scaleX(-1) scale(1.05);
+}
+
+.video-header-overlay {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    z-index: 5;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.video-header-overlay h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.video-header-overlay .call-timer {
+    font-size: 0.9rem;
+    margin-bottom: 0;
+    color: #4ade80;
+}
+
+.btn-camera {
+    background: #334155;
+    color: #fff;
+}
+
+.btn-camera.off {
+    background: #475569;
+    opacity: 0.75;
+}
+
+.btn-video-friend {
+    background: #8b5cf6;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: var(--radius-full);
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+}
+
+.btn-video-friend:hover {
+    background: #7c3aed;
+}
+
+.call-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.badge-video {
+    background: rgba(139, 92, 246, 0.2);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+.badge-audio {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}

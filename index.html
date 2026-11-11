@@ -6,7 +6,7 @@
     <title>MyFriend - Peer-to-Peer Voice Calling</title>
     <meta name="description" content="Simple, fast, and modern voice calling web application for friends.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%2222%22 font-size=%2222%22>📞</text></svg>">
-    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/style.css?v=5">
     
     <!-- Google Identity Services (Sign in with Google / Gmail) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -162,25 +162,30 @@
                 <summary style="font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; font-weight: 500;">
                     📞 Direct Username Dial (Optional)
                 </summary>
-                <form id="callForm" style="margin-top: 12px;">
+                <div style="margin-top: 12px;">
                     <div class="form-group">
                         <input type="text" id="targetUsernameInput" class="form-input" placeholder="Enter username (e.g. rahul, anjali)" autocomplete="off">
                     </div>
-                    <button type="submit" class="btn btn-success" id="makeCallBtn">
-                        📞 Call by Username
-                    </button>
-                </form>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-success" id="makeCallBtn" style="flex: 1;">
+                            📞 Audio Call
+                        </button>
+                        <button type="button" class="btn btn-video-friend" id="makeVideoCallBtn" style="flex: 1; border-radius: var(--radius-md); padding: 12px 20px; font-size: 0.95rem; justify-content: center;">
+                            📹 Video Call
+                        </button>
+                    </div>
+                </div>
             </details>
 
             <!-- How to test instruction card -->
             <div class="instruction-box">
-                <strong>💡 How Friend Calling Works:</strong>
+                <strong>💡 How Calling Works:</strong>
                 <ol>
                     <li>Sign in with your Gmail (e.g. <strong>signkipdesign@gmail.com</strong>).</li>
-                    <li>Open an Incognito tab or mobile phone, and sign in with another Gmail (or Demo account <strong>Anjali</strong>).</li>
-                    <li>In the search box above, enter the other person's Gmail address (e.g. <strong>anjali.demo@gmail.com</strong>) and click <strong>➕ Add Friend</strong>.</li>
-                    <li>The other account receives a Friend Request. Once they click <strong>Accept</strong>, both of you appear in each other's <strong>Friends List</strong>!</li>
-                    <li>Click <strong>📞 Call</strong> next to their name in the Friends List to start talking!</li>
+                    <li>Open an Incognito tab or mobile phone, and sign in with another Gmail or Demo account.</li>
+                    <li>Add each other to the <strong>Friends List</strong> using the search box above.</li>
+                    <li>Click <strong>📞 Audio</strong> for voice call, or <strong>📹 Video</strong> for high-definition video call!</li>
+                    <li>Accept the call on the other screen, and start seeing and talking to each other!</li>
                 </ol>
             </div>
         </section>
@@ -191,6 +196,7 @@
     <!-- ========================================== -->
     <div id="outgoingCallModal" class="modal-overlay hidden">
         <div class="call-modal-card">
+            <div id="outgoingCallTypeBadge" class="call-type-badge badge-audio">📞 Audio Call</div>
             <div class="avatar-pulse-wrapper">
                 <div class="avatar-pulse-ring"></div>
                 <img id="outgoingTargetAvatar" src="" alt="Target">
@@ -208,12 +214,13 @@
     <!-- ========================================== -->
     <div id="incomingCallModal" class="modal-overlay hidden">
         <div class="call-modal-card">
+            <div id="incomingCallTypeBadge" class="call-type-badge badge-video">📹 Incoming Video Call</div>
             <div class="avatar-pulse-wrapper">
                 <div class="avatar-pulse-ring" style="background: rgba(16, 185, 129, 0.35);"></div>
                 <img id="incomingCallerAvatar" src="" alt="Caller">
             </div>
             <h2 id="incomingCallerName" class="call-target-title">Caller Name</h2>
-            <p id="incomingCallerUsername" class="call-target-subtitle" style="color: #6ee7b7;">Incoming Voice Call Request...</p>
+            <p id="incomingCallerUsername" class="call-target-subtitle" style="color: #6ee7b7;">Incoming Call Request...</p>
             
             <div class="incoming-buttons-row">
                 <button id="declineCallBtn" class="btn btn-danger" type="button">
@@ -230,26 +237,44 @@
     <!-- 5. ACTIVE CONNECTED CALL OVERLAY -->
     <!-- ========================================== -->
     <div id="activeCallModal" class="modal-overlay hidden">
-        <div class="call-modal-card">
-            <div class="avatar-pulse-wrapper" style="margin-bottom: 12px;">
-                <img id="connectedAvatar" src="" alt="Connected User" style="border-color: #10b981;">
-            </div>
-            <h2 id="connectedName" class="call-target-title">Friend</h2>
-            <p id="connectedUsername" class="call-target-subtitle">Active Audio Call</p>
-
-            <!-- Call Duration Timer -->
-            <div id="callDuration" class="call-timer">00:00</div>
-
-            <!-- Audio Waveform Visualizer Canvas -->
-            <div class="visualizer-container">
-                <canvas id="visualizerCanvas" width="280" height="50"></canvas>
+        <div id="activeCallCard" class="call-modal-card">
+            <!-- Video Stage (shown during video call) -->
+            <div id="videoStage" class="video-stage hidden">
+                <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
+                <video id="localVideo" class="local-video-pip" autoplay playsinline muted></video>
+                <div class="video-header-overlay">
+                    <h3 id="videoConnectedName">Friend</h3>
+                    <span style="color: #94a3b8;">•</span>
+                    <div id="videoCallDuration" class="call-timer">00:00</div>
+                </div>
             </div>
 
-            <!-- Controls (Mute / Hangup) -->
+            <!-- Audio Stage (shown during audio-only call) -->
+            <div id="audioStage">
+                <div class="avatar-pulse-wrapper" style="margin-bottom: 12px;">
+                    <img id="connectedAvatar" src="" alt="Connected User" style="border-color: #10b981;">
+                </div>
+                <h2 id="connectedName" class="call-target-title">Friend</h2>
+                <p id="connectedUsername" class="call-target-subtitle">Active Audio Call</p>
+
+                <!-- Call Duration Timer -->
+                <div id="callDuration" class="call-timer">00:00</div>
+
+                <!-- Audio Waveform Visualizer Canvas -->
+                <div class="visualizer-container">
+                    <canvas id="visualizerCanvas" width="280" height="50"></canvas>
+                </div>
+            </div>
+
+            <!-- Controls (Mute / Camera / Hangup) -->
             <div class="call-controls-row">
                 <button id="muteToggleBtn" class="control-circle-btn btn-mute" type="button" title="Mute Microphone">
                     <div id="muteIcon">🎙️</div>
                     <span id="muteLabel">Mute</span>
+                </button>
+                <button id="cameraToggleBtn" class="control-circle-btn btn-camera" type="button" title="Toggle Camera">
+                    <div id="cameraIcon">📹</div>
+                    <span id="cameraLabel">Camera</span>
                 </button>
                 <button id="endCallBtn" class="control-circle-btn btn-hangup" type="button" title="End Call">
                     <div>🛑</div>
@@ -266,9 +291,9 @@
     <div id="toast" class="toast"></div>
 
     <!-- Scripts with Cache-Busting Version Query -->
-    <script src="js/peerjs.min.js?v=4"></script>
-    <script src="js/sound.js?v=4"></script>
-    <script src="js/auth.js?v=4"></script>
-    <script src="js/app.js?v=4"></script>
+    <script src="js/peerjs.min.js?v=5"></script>
+    <script src="js/sound.js?v=5"></script>
+    <script src="js/auth.js?v=5"></script>
+    <script src="js/app.js?v=5"></script>
 </body>
 </html>

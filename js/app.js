@@ -1,4 +1,4 @@
-// Main Application Logic: WebRTC Voice Calling, PeerJS, Audio Controls, Friends System & UI State
+// Main Application Logic: WebRTC Voice & Video Calling, PeerJS, Audio/Video Controls, Friends System & UI State
 
 class CallApp {
     constructor() {
@@ -6,12 +6,20 @@ class CallApp {
         this.currentCall = null;
         this.currentDataConn = null;
         this.localStream = null;
-        this.remoteAudioEl = document.getElementById('remoteAudio');
         
+        // Media elements
+        this.remoteAudioEl = document.getElementById('remoteAudio');
+        this.remoteVideoEl = document.getElementById('remoteVideo');
+        this.localVideoEl = document.getElementById('localVideo');
+        
+        // Call state
         this.callState = 'idle'; // idle | calling | incoming | connected
+        this.currentCallType = 'audio'; // 'audio' | 'video'
+        this.incomingCallType = 'audio';
         this.callTimerInterval = null;
         this.callSeconds = 0;
         this.isMuted = false;
+        this.isCameraOn = false;
         
         this.activeCaller = null;
         this.activeTarget = null;
@@ -169,7 +177,6 @@ class CallApp {
         const currentUser = authManager.getUser();
         if (!currentUser) return;
 
-        // Parse username from email if provided
         let targetUsername = targetQuery;
         let targetEmail = targetQuery;
         if (targetQuery.includes('@')) {
@@ -195,7 +202,6 @@ class CallApp {
             return;
         }
 
-        // Add to friend list so user has it immediately
         const friendObj = {
             username: targetUsername,
             name: targetUsername.charAt(0).toUpperCase() + targetUsername.slice(1),
@@ -205,7 +211,6 @@ class CallApp {
         authManager.addFriend(friendObj);
         this.renderFriendsList();
 
-        // Send real-time friend request signal via PeerJS
         try {
             const remotePeerId = this.formatPeerId(targetUsername);
             const conn = this.peer.connect(remotePeerId, { reliable: true });
@@ -256,8 +261,11 @@ class CallApp {
                     </div>
                 </div>
                 <div class="friend-right">
-                    <button class="btn-call-friend" data-username="${friend.username}">
-                        📞 Call
+                    <button class="btn-call-friend" data-username="${friend.username}" title="Voice Call">
+                        📞 Audio
+                    </button>
+                    <button class="btn-video-friend" data-username="${friend.username}" title="Video Call">
+                        📹 Video
                     </button>
                     <button class="btn-remove-friend" data-username="${friend.username}" title="Remove Friend">
                         🗑️
@@ -265,9 +273,14 @@ class CallApp {
                 </div>
             `;
 
-            // Call friend button
+            // Audio call button
             item.querySelector('.btn-call-friend').addEventListener('click', () => {
-                this.startOutgoingCall(friend.username);
+                this.startOutgoingCall(friend.username, 'audio');
+            });
+
+            // Video call button
+            item.querySelector('.btn-video-friend').addEventListener('click', () => {
+                this.startOutgoingCall(friend.username, 'video');
             });
 
             // Remove friend button
@@ -316,14 +329,12 @@ class CallApp {
                 </div>
             `;
 
-            // Accept friend request
             card.querySelector('.accept-req-btn').addEventListener('click', () => {
                 authManager.addFriend(req);
                 authManager.removePendingRequest(req.username);
                 this.renderPendingRequests();
                 this.renderFriendsList();
 
-                // Signal sender
                 try {
                     const remotePeerId = this.formatPeerId(req.username);
                     const conn = this.peer.connect(remotePeerId, { reliable: true });
@@ -338,7 +349,6 @@ class CallApp {
                 this.showToast(`Added ${req.name || req.username} to your Friends List! 🟢`, 'success');
             });
 
-            // Decline friend request
             card.querySelector('.decline-req-btn').addEventListener('click', () => {
                 authManager.removePendingRequest(req.username);
                 this.renderPendingRequests();
@@ -350,11 +360,16 @@ class CallApp {
     }
 
     bindCallEvents() {
-        // Direct Call form
-        document.getElementById('callForm')?.addEventListener('submit', (e) => {
-            e.preventDefault();
+        // Direct Audio Call
+        document.getElementById('makeCallBtn')?.addEventListener('click', () => {
             const targetUsername = document.getElementById('targetUsernameInput').value.trim().toLowerCase();
-            this.startOutgoingCall(targetUsername);
+            this.startOutgoingCall(targetUsername, 'audio');
+        });
+
+        // Direct Video Call
+        document.getElementById('makeVideoCallBtn')?.addEventListener('click', () => {
+            const targetUsername = document.getElementById('targetUsernameInput').value.trim().toLowerCase();
+            this.startOutgoingCall(targetUsername, 'video');
         });
 
         // Cancel Outgoing Call
@@ -380,6 +395,11 @@ class CallApp {
         // Mute / Unmute Button
         document.getElementById('muteToggleBtn')?.addEventListener('click', () => {
             this.toggleMute();
+        });
+
+        // Camera Toggle Button
+        document.getElementById('cameraToggleBtn')?.addEventListener('click', () => {
+            this.toggleCamera();
         });
 
         // Copy Username Button
@@ -448,7 +468,7 @@ class CallApp {
             this.peer.on('open', (id) => {
                 console.log('Peer connected with ID:', id);
                 statusBadge.innerHTML = `<span class="status-dot online"></span> Online & Ready for Calls`;
-                this.showToast("Voice network connected 🟢", 'success');
+                this.showToast("Voice & Video network connected 🟢", 'success');
             });
 
             this.peer.on('connection', (conn) => {
@@ -503,18 +523,19 @@ class CallApp {
                 return;
             }
             
-            // Voice Call Handshake
+            // Call Handshake (Audio or Video)
             if (data.type === 'CALL_REQUEST') {
                 if (this.callState !== 'idle') {
                     conn.send({ type: 'CALL_BUSY' });
                     return;
                 }
                 this.activeCaller = data.caller;
+                this.incomingCallType = data.callType || 'audio';
                 this.currentDataConn = conn;
-                this.showIncomingCallScreen(data.caller);
+                this.showIncomingCallScreen(data.caller, this.incomingCallType);
             } 
             else if (data.type === 'CALL_ACCEPTED') {
-                this.onOutgoingCallAccepted();
+                this.onOutgoingCallAccepted(data.callType || this.currentCallType);
             } 
             else if (data.type === 'CALL_DECLINED') {
                 this.cancelOutgoingCall("Friend declined the call.");
@@ -534,8 +555,8 @@ class CallApp {
         });
     }
 
-    // Step 2: Outgoing Call Flow
-    startOutgoingCall(targetUsername) {
+    // Step 2: Outgoing Call Flow (Supports 'audio' and 'video')
+    startOutgoingCall(targetUsername, callType = 'audio') {
         const currentUser = authManager.getUser();
         if (!currentUser) return;
 
@@ -560,12 +581,21 @@ class CallApp {
         }
 
         this.callState = 'calling';
+        this.currentCallType = callType;
         this.activeTarget = cleanTarget;
 
         // UI Outgoing Screen
+        const badge = document.getElementById('outgoingCallTypeBadge');
+        if (badge) {
+            badge.textContent = callType === 'video' ? '📹 Video Call' : '📞 Audio Call';
+            badge.className = `call-type-badge ${callType === 'video' ? 'badge-video' : 'badge-audio'}`;
+        }
+
         document.getElementById('outgoingTargetName').textContent = `@${cleanTarget}`;
         document.getElementById('outgoingTargetAvatar').src = `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanTarget}`;
-        document.getElementById('outgoingStatusText').textContent = "Requesting voice call...";
+        document.getElementById('outgoingStatusText').textContent = callType === 'video' 
+            ? "Requesting high-definition video call..." 
+            : "Requesting voice call...";
         document.getElementById('outgoingCallModal').classList.remove('hidden');
 
         // Play Outgoing Ring Sound
@@ -579,13 +609,14 @@ class CallApp {
             document.getElementById('outgoingStatusText').textContent = "Ringing friend's phone...";
             this.currentDataConn.send({
                 type: 'CALL_REQUEST',
+                callType: callType,
                 caller: currentUser
             });
         });
 
         this.currentDataConn.on('data', (data) => {
             if (data.type === 'CALL_ACCEPTED') {
-                this.onOutgoingCallAccepted();
+                this.onOutgoingCallAccepted(data.callType || this.currentCallType);
             } else if (data.type === 'CALL_DECLINED') {
                 this.cancelOutgoingCall("Friend declined the call.");
             } else if (data.type === 'CALL_BUSY') {
@@ -624,8 +655,16 @@ class CallApp {
     }
 
     // Step 3: Incoming Call Screen
-    showIncomingCallScreen(caller) {
+    showIncomingCallScreen(caller, callType = 'audio') {
         this.callState = 'incoming';
+        this.incomingCallType = callType;
+
+        const badge = document.getElementById('incomingCallTypeBadge');
+        if (badge) {
+            badge.textContent = callType === 'video' ? '📹 Incoming Video Call' : '📞 Incoming Audio Call';
+            badge.className = `call-type-badge ${callType === 'video' ? 'badge-video' : 'badge-audio'}`;
+        }
+
         document.getElementById('incomingCallerName').textContent = caller.name || `@${caller.username}`;
         document.getElementById('incomingCallerUsername').textContent = `@${caller.username}`;
         document.getElementById('incomingCallerAvatar').src = caller.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${caller.username}`;
@@ -634,7 +673,6 @@ class CallApp {
         // Play pleasant incoming ringtone
         soundEffects.playIncomingRing();
 
-        // 35s Timeout to auto dismiss if unanswered
         if (this.ringTimeout) clearTimeout(this.ringTimeout);
         this.ringTimeout = setTimeout(() => {
             if (this.callState === 'incoming') {
@@ -662,33 +700,58 @@ class CallApp {
         if (this.ringTimeout) clearTimeout(this.ringTimeout);
         soundEffects.stopAll();
 
+        const isVideo = this.incomingCallType === 'video';
+        const constraints = {
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+        };
+
         try {
-            // Request Microphone Access
-            this.localStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                },
-                video: false
-            });
+            try {
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (mediaErr) {
+                if (isVideo) {
+                    console.warn("Video camera unavailable, falling back to audio only:", mediaErr);
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                } else {
+                    throw mediaErr;
+                }
+            }
+
+            // Setup local video element if video track exists
+            if (this.localStream.getVideoTracks().length > 0) {
+                this.isCameraOn = true;
+                if (this.localVideoEl) {
+                    this.localVideoEl.srcObject = this.localStream;
+                    this.localVideoEl.play().catch(e => console.log("Local video play notice:", e));
+                }
+            } else {
+                this.isCameraOn = false;
+            }
 
             // Signal caller that call is accepted
             if (this.currentDataConn && this.currentDataConn.open) {
-                this.currentDataConn.send({ type: 'CALL_ACCEPTED' });
+                this.currentDataConn.send({
+                    type: 'CALL_ACCEPTED',
+                    callType: this.incomingCallType
+                });
             }
 
             document.getElementById('incomingCallModal').classList.add('hidden');
-            this.setupConnectedCallView(this.activeCaller);
+            this.setupConnectedCallView(this.activeCaller, this.incomingCallType);
 
         } catch (err) {
-            console.error("Microphone permission error:", err);
-            this.showToast("Microphone access is required to make calls. Please allow microphone permissions.", 'error');
-            this.declineIncomingCall("Could not access microphone.");
+            console.error("Media permission error:", err);
+            this.showToast("Microphone/Camera access required. Please grant browser permissions.", 'error');
+            this.declineIncomingCall("Could not access media devices.");
         }
     }
 
-    // Incoming Media Call Handler (Receiver receives caller's WebRTC audio call)
+    // Incoming Media Call Handler
     handleIncomingMediaCall(mediaCall) {
         console.log("Incoming WebRTC media call from peer...");
         this.currentCall = mediaCall;
@@ -696,14 +759,23 @@ class CallApp {
         if (this.localStream) {
             mediaCall.answer(this.localStream);
         } else {
-            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                .then(stream => {
-                    this.localStream = stream;
-                    mediaCall.answer(stream);
-                })
-                .catch(err => {
-                    console.error("Failed to answer media call:", err);
-                });
+            const isVideo = this.incomingCallType === 'video';
+            navigator.mediaDevices.getUserMedia({
+                audio: true,
+                video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+            }).then(stream => {
+                this.localStream = stream;
+                if (stream.getVideoTracks().length > 0) {
+                    this.isCameraOn = true;
+                    if (this.localVideoEl) {
+                        this.localVideoEl.srcObject = stream;
+                        this.localVideoEl.play().catch(e => {});
+                    }
+                }
+                mediaCall.answer(stream);
+            }).catch(err => {
+                console.error("Failed to acquire stream to answer:", err);
+            });
         }
 
         mediaCall.on('stream', (remoteStream) => {
@@ -721,25 +793,46 @@ class CallApp {
     }
 
     // Step 5: Caller handles accepted call
-    async onOutgoingCallAccepted() {
+    async onOutgoingCallAccepted(callType = this.currentCallType) {
         if (this.ringTimeout) clearTimeout(this.ringTimeout);
         soundEffects.stopAll();
 
+        const isVideo = callType === 'video';
+        const constraints = {
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            },
+            video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false
+        };
+
         try {
-            // Request Caller Microphone
-            this.localStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                },
-                video: false
-            });
+            try {
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (mediaErr) {
+                if (isVideo) {
+                    console.warn("Camera unavailable, fallback to audio:", mediaErr);
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                } else {
+                    throw mediaErr;
+                }
+            }
+
+            if (this.localStream.getVideoTracks().length > 0) {
+                this.isCameraOn = true;
+                if (this.localVideoEl) {
+                    this.localVideoEl.srcObject = this.localStream;
+                    this.localVideoEl.play().catch(e => {});
+                }
+            } else {
+                this.isCameraOn = false;
+            }
 
             const remotePeerId = this.formatPeerId(this.activeTarget);
             console.log("Calling remote media peer:", remotePeerId);
             
-            // Initiate WebRTC Audio Call
+            // Initiate WebRTC Call with localStream
             this.currentCall = this.peer.call(remotePeerId, this.localStream);
 
             this.currentCall.on('stream', (remoteStream) => {
@@ -760,38 +853,78 @@ class CallApp {
                 username: this.activeTarget,
                 avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${this.activeTarget}`
             };
-            this.setupConnectedCallView(targetInfo);
+            this.setupConnectedCallView(targetInfo, callType);
 
         } catch (err) {
-            console.error("Caller mic error:", err);
-            this.showToast("Microphone permission denied. Cannot start audio call.", 'error');
-            this.cancelOutgoingCall("Microphone permission denied");
+            console.error("Caller media error:", err);
+            this.showToast("Microphone/Camera permission denied. Cannot start call.", 'error');
+            this.cancelOutgoingCall("Permission denied");
         }
     }
 
-    // Step 6: Handle connected remote audio
+    // Step 6: Handle connected remote audio and video stream
     handleRemoteStream(remoteStream) {
-        console.log("Remote audio stream connected!");
+        console.log("Remote media stream connected!");
         soundEffects.playConnectedSound();
 
+        // Attach audio
         if (this.remoteAudioEl) {
             this.remoteAudioEl.srcObject = remoteStream;
             this.remoteAudioEl.play().catch(e => console.log("Audio play allowed on user interaction:", e));
         }
 
-        // Setup sound visualizer on the audio stream
-        this.startAudioVisualizer(remoteStream);
+        const hasRemoteVideo = remoteStream.getVideoTracks().length > 0;
+        const hasLocalVideo = this.localStream && this.localStream.getVideoTracks().length > 0;
+
+        if (hasRemoteVideo || hasLocalVideo) {
+            // Switch to Video Mode UI
+            document.getElementById('activeCallCard').classList.add('video-mode');
+            document.getElementById('videoStage').classList.remove('hidden');
+            document.getElementById('audioStage').classList.add('hidden');
+
+            if (this.remoteVideoEl) {
+                this.remoteVideoEl.srcObject = remoteStream;
+                this.remoteVideoEl.play().catch(e => console.log("Remote video play notice:", e));
+            }
+        } else {
+            // Audio-only Mode
+            document.getElementById('activeCallCard').classList.remove('video-mode');
+            document.getElementById('videoStage').classList.add('hidden');
+            document.getElementById('audioStage').classList.remove('hidden');
+
+            this.startAudioVisualizer(remoteStream);
+        }
+
+        this.updateCameraUI();
     }
 
     // Step 7: Connected Call Screen & Timer
-    setupConnectedCallView(remoteUser) {
+    setupConnectedCallView(remoteUser, callType = 'audio') {
         this.callState = 'connected';
         this.hideAllCallOverlays();
 
-        document.getElementById('activeCallModal').classList.remove('hidden');
+        const activeModal = document.getElementById('activeCallModal');
+        const activeCard = document.getElementById('activeCallCard');
+        const videoStage = document.getElementById('videoStage');
+        const audioStage = document.getElementById('audioStage');
+
+        activeModal.classList.remove('hidden');
+
+        // Populate names & avatars
         document.getElementById('connectedAvatar').src = remoteUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${remoteUser.username}`;
         document.getElementById('connectedName').textContent = remoteUser.name || `@${remoteUser.username}`;
         document.getElementById('connectedUsername').textContent = `@${remoteUser.username}`;
+        document.getElementById('videoConnectedName').textContent = remoteUser.name || `@${remoteUser.username}`;
+
+        if (callType === 'video') {
+            activeCard.classList.add('video-mode');
+            videoStage.classList.remove('hidden');
+            audioStage.classList.add('hidden');
+        } else {
+            activeCard.classList.remove('video-mode');
+            videoStage.classList.add('hidden');
+            audioStage.classList.remove('hidden');
+        }
 
         // Reset and start call timer
         this.callSeconds = 0;
@@ -802,16 +935,21 @@ class CallApp {
             this.updateTimerDisplay();
         }, 1000);
 
-        // Mute state reset
+        // Control states
         this.isMuted = false;
         this.updateMuteUI();
+        this.updateCameraUI();
     }
 
     updateTimerDisplay() {
         const minutes = Math.floor(this.callSeconds / 60);
         const seconds = this.callSeconds % 60;
         const formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-        document.getElementById('callDuration').textContent = formatted;
+        
+        const audioTimer = document.getElementById('callDuration');
+        const videoTimer = document.getElementById('videoCallDuration');
+        if (audioTimer) audioTimer.textContent = formatted;
+        if (videoTimer) videoTimer.textContent = formatted;
     }
 
     toggleMute() {
@@ -829,6 +967,8 @@ class CallApp {
         const muteBtn = document.getElementById('muteToggleBtn');
         const muteIcon = document.getElementById('muteIcon');
         const muteLabel = document.getElementById('muteLabel');
+        if (!muteBtn) return;
+
         if (this.isMuted) {
             muteBtn.classList.add('muted');
             muteIcon.textContent = "🔇";
@@ -837,6 +977,75 @@ class CallApp {
             muteBtn.classList.remove('muted');
             muteIcon.textContent = "🎙️";
             muteLabel.textContent = "Mute";
+        }
+    }
+
+    // Toggle Camera On/Off during active call
+    async toggleCamera() {
+        if (!this.localStream) return;
+
+        const videoTracks = this.localStream.getVideoTracks();
+
+        if (videoTracks.length > 0) {
+            // Already has video track: toggle enable/disable
+            this.isCameraOn = !this.isCameraOn;
+            videoTracks[0].enabled = this.isCameraOn;
+            this.updateCameraUI();
+            this.showToast(this.isCameraOn ? "Camera Turned On 📹" : "Camera Turned Off 🚫", 'info');
+        } else {
+            // Did not have video track: dynamically request camera stream
+            try {
+                const newStream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+                });
+                const newVideoTrack = newStream.getVideoTracks()[0];
+                this.localStream.addTrack(newVideoTrack);
+
+                if (this.localVideoEl) {
+                    this.localVideoEl.srcObject = this.localStream;
+                    this.localVideoEl.play().catch(e => {});
+                }
+
+                // Add to WebRTC peer connection
+                if (this.currentCall && this.currentCall.peerConnection) {
+                    const senders = this.currentCall.peerConnection.getSenders();
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    if (videoSender) {
+                        videoSender.replaceTrack(newVideoTrack);
+                    } else {
+                        this.currentCall.peerConnection.addTrack(newVideoTrack, this.localStream);
+                    }
+                }
+
+                // Switch UI to Video Mode
+                document.getElementById('activeCallCard').classList.add('video-mode');
+                document.getElementById('videoStage').classList.remove('hidden');
+                document.getElementById('audioStage').classList.add('hidden');
+
+                this.isCameraOn = true;
+                this.updateCameraUI();
+                this.showToast("Camera Turned On 📹", 'success');
+            } catch (err) {
+                console.error("Camera access error:", err);
+                this.showToast("Could not access camera device.", 'error');
+            }
+        }
+    }
+
+    updateCameraUI() {
+        const camBtn = document.getElementById('cameraToggleBtn');
+        const camIcon = document.getElementById('cameraIcon');
+        const camLabel = document.getElementById('cameraLabel');
+        if (!camBtn) return;
+
+        if (this.isCameraOn) {
+            camBtn.classList.remove('off');
+            camIcon.textContent = "📹";
+            camLabel.textContent = "Cam On";
+        } else {
+            camBtn.classList.add('off');
+            camIcon.textContent = "🚫";
+            camLabel.textContent = "Cam Off";
         }
     }
 
@@ -945,10 +1154,34 @@ class CallApp {
             this.remoteAudioEl.srcObject = null;
         }
 
+        if (this.remoteVideoEl) {
+            this.remoteVideoEl.srcObject = null;
+        }
+
+        if (this.localVideoEl) {
+            this.localVideoEl.srcObject = null;
+        }
+
+        const activeCard = document.getElementById('activeCallCard');
+        if (activeCard) {
+            activeCard.classList.remove('video-mode');
+        }
+
+        const videoStage = document.getElementById('videoStage');
+        if (videoStage) {
+            videoStage.classList.add('hidden');
+        }
+
+        const audioStage = document.getElementById('audioStage');
+        if (audioStage) {
+            audioStage.classList.remove('hidden');
+        }
+
         this.callState = 'idle';
         this.activeCaller = null;
         this.activeTarget = null;
         this.isMuted = false;
+        this.isCameraOn = false;
 
         this.hideAllCallOverlays();
     }
